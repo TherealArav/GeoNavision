@@ -1,76 +1,128 @@
-# Hackathon Project: AI POI Tour Guide (Streamlit App)
-This project is a Streamlit application that uses a RAG (Retrieval-Augmented Generation) system to provide users with summaries of Points of Interest (POIs) near their location.
-It uses LangChain to structure the logic, Google Maps API to find POIs, Google Search API to get descriptions, and Gemini 2.5-Flash to generate the final summary.
-# How It Works: A RAG-Based System
-This isn't a typical RAG that uses a static vector database. This is a dynamic, API-driven RAG, which is perfect for a hackathon.
-1. Retrieval (The "R"): We built a custom LangChain BaseRetriever called GoogleMapsPOIRetriever. When you "query" this retriever (e.g., with "museums"):  
-  * It first calls the Google Maps Places API (Nearby Search) to find POIs (like "Louvre Museum") near the user-provided latitude/longitude.
-  * It then "augments" this by calling the Google Search API for each POI to get a short descriptive snippet.
-  * It bundles all this information into a list of LangChain Document objects.
-2. Augmentation (The "A"): The list of Document objects is formatted into a clean string. This string becomes the {context} that we "stuff" into our prompt.
-3. Generation (The "G"): The final, context-filled prompt is sent to the Gemini 2.5-Flash model (ChatGoogleGenerativeAI). The LLM's job is to synthesize this context into a friendly, human-readable summary, following the instructions in the prompt.
-4. Caching: The entire RAG chain function is wrapped in Streamlit's @st.cache_data. This means if you search for the same query at the same location, the app will return the result instantly from its cache instead of re-calling all the APIs.
-# 🔒 Securing Your App for Deployment (Hackathon Guide)
-Exposing an app that uses paid APIs is risky. Here are the two most important steps to protect yourself from abuse and high bills.
-1. (Most Important) Set Google Cloud API Quotas
-This is your best safety net. It tells Google "No matter what, do not charge me for more than X requests."
-1. Go to the Google Cloud Console.
-2. Select the project you used to create your API keys.
-3. In the navigation menu, go to "APIs & Services" > "Enabled APIs & services".
-4. You will see a list of APIs you enabled. Click on one, for example, "Places API".
-5. Go to the "Quotas" tab.
-6. You will see a list of quotas like "Nearby Search requests per minute". Click the pencil (edit) icon.
-7. Set a low limit. For a hackathon, you could set "Requests per day" to 100 and "Requests per minute" to 10. This is more than enough for judging but prevents a bad actor from running up a bill.
-8. Repeat this process for your other APIs:
-* "Custom Search API": Set quotas (e.g., 100 queries per day).
-* "Vertex AI" / "Gemini": Find the "Quotas" page for the Gemini models (e.g., "Generative Language API") and set a low daily limit (e.g., 100 requests per day).
-9. Set a Billing Alert: Go to "Billing" > "Budgets & alerts" and create a budget. Set an alert to email you if your project bill exceeds $1.00.
-2. Add a Simple Password (Code Included)
-The updated app.py now includes a simple password check. This prevents casual users or bots from accessing the app at all.
-To use this:
+# AI POI Tour Guide 🗺️  
+*A Streamlit App for Hackathon 2025 Genesis*
 
-1. For Local Development: Create a file at .streamlit/secrets.toml and add:
-`HACKATHON_PASSWORD = "your-local-password"`
-`# ...add your API keys here too`
-3. For Streamlit Cloud Deployment: When you deploy your app, go to "Advanced settings..." and add your secrets. This is where you will set the password for the judges:
-`# Secrets for Streamlit Cloud`
-`GOOGLE_API_KEY = "your_gemini_key_here"`
-`GOOGLE_MAPS_API_KEY = "your_maps_key_here"`
-`GOOGLE_SEARCH_API_KEY = "your_search_key_here"`
-`GOOGLE_CSE_ID = "your_cse_id_here"`
-`                                   `
-`HACKATHON_PASSWORD = "a-secure-password-for-the-judges"`
-Now, only people with this password can use your app.
-# 🚀 How to Run This Project
-1. Install Dependencies
-`Create a Python virtual environment and install the required packages.`
-`python -m venv venv`
-`source venv/bin/activate  # On Windows, use venv\Scripts\`
-`pip install -r requirements.txt`
+> **Your personal tour guide, powered by RAG, LangChain, Google APIs, and Gemini 2.5-Flash!**
 
-2. Set Up Local Secrets
+---
 
-For local development, Streamlit uses a secrets.toml file.
+## 🚩 Table of Contents
+- [Overview](#overview)
+- [Features](#features)
+- [How It Works](#how-it-works)
+- [Security & API Protection](#security--api-protection)
+- [Setup: Local Development](#setup-local-development)
+- [Deployment: Streamlit Cloud](#deployment-streamlit-cloud)
+- [Acknowledgements](#acknowledgements)
 
-1. Create a folder named .streamlit in your project's root directory.
+---
 
-2. Inside that folder, create a file named secrets.toml.
+## 📝 Overview
+This project is a **Streamlit** web application that provides users with summaries of Points of Interest (POIs) near their location, leveraging an API-driven Retrieval-Augmented Generation (RAG) workflow.
 
-3. Copy the contents of the secrets.toml file I generated for you, and fill in your actual API keys and a test password.
+---
 
-4. IMPORTANT: Add .streamlit/secrets.toml to your .gitignore file so you never commit your keys to GitHub.
+## ✨ Features
+- **API-Driven RAG:** Dynamic, real-time POI data using Google Maps and Google Search.
+- **Natural Summaries:** Synthesized by Gemini 2.5-Flash LLM (via LangChain).
+- **Easy to Use:** Clean Streamlit UI with a simple password gate.
+- **Caching:** Fast repeat searches using Streamlit cache.
+- **Cloud-ready:** Deploy to Streamlit Community Cloud in minutes!
 
-3. Run the Streamlit Application
-`streamlit run app.py`
-Your browser will open. You will be prompted to enter the password you set in your secrets.toml file.
-4. Deploy to Streamlit Cloud
-1. Push your code (including app.py, requirements.txt, README.md but NOT .streamlit/secrets.toml) to a public GitHub repository.
+---
 
-2. Go to Streamlit Community Cloud and link your GitHub account.
+## ⚙️ How It Works
 
-3. Click "New app", select your repository, and before deploying, click "Advanced settings...".
+#### 1. Retrieval (R)
+- Custom **LangChain BaseRetriever** calls:
+  - **Google Maps Places API:** Finds POIs (e.g., "museums" nearby).
+  - **Google Search API:** Fetches a description for each POI.
+  - Wraps results as LangChain `Document` objects.
 
-4. Copy and paste the contents of your secrets.toml file (with your real keys) into the "Secrets" text box.
+#### 2. Augmentation (A)
+- Bundles POI details into a context string.
 
-5. Click "Deploy!"
+#### 3. Generation (G)
+- Sends context to **Gemini 2.5-Flash** via `ChatGoogleGenerativeAI`.
+- Model outputs a human-readable summary.
 
+#### 4. Caching
+- The entire RAG chain is cached using `@st.cache_data`, speeding up repeated queries at the same location.
+
+---
+
+## 🔒 Security & API Protection
+
+**Prevent API abuse and runaway costs:**
+
+### 1. Set Google Cloud API Quotas *(Strongly Recommended)*
+- Go to **Google Cloud Console** > your project > **APIs & Services** > **Enabled APIs & services**
+- For each API ("Places", "Custom Search", "Vertex AI / Gemini"):
+  - Under **Quotas**, set low daily and per-minute limits (e.g., 100/day, 10/minute).
+- Set a **Billing Alert** under "Budgets & alerts" (e.g., alert at $1.00 spend).
+
+### 2. Add Password Protection
+- **Local:**  
+  In `.streamlit/secrets.toml` add  
+  ```toml
+  HACKATHON_PASSWORD = "your-local-password"
+  ```
+- **Cloud:**  
+  Add secrets (password + all API keys) through Streamlit Cloud **Advanced settings**.
+
+*Users must enter the password to use the app.*
+
+---
+
+## 💻 Setup: Local Development
+
+### 1. Clone & Install
+```bash
+git clone https://github.com/TherealArav/Hackathon_2025_Genesis.git
+cd Hackathon_2025_Genesis
+python -m venv venv
+source venv/bin/activate  # (On Windows: venv\Scripts\activate)
+pip install -r requirements.txt
+```
+
+### 2. API Keys & Secrets
+1. Create a folder: `.streamlit/`
+2. Inside, add a file called `secrets.toml`
+3. Add your keys:
+    ```toml
+    HACKATHON_PASSWORD = "your-local-password"
+    GOOGLE_API_KEY = "..."
+    GOOGLE_MAPS_API_KEY = "..."
+    GOOGLE_SEARCH_API_KEY = "..."
+    GOOGLE_CSE_ID = "..."
+    ```
+4. _Important_: Add `.streamlit/secrets.toml` to `.gitignore`
+
+### 3. Run the App
+```bash
+streamlit run app.py
+```
+- Open browser to the provided URL, enter your chosen password.
+
+---
+
+## 🚀 Deployment: Streamlit Cloud
+
+1. Push code to your public GitHub (except secrets).
+2. Go to [Streamlit Community Cloud](https://streamlit.io/cloud).
+3. Click **New app** > Select your repo.
+4. In **Advanced settings**, paste secrets (from your `secrets.toml`) into the Secrets box.
+5. Click **Deploy!**
+
+---
+
+## 🙏 Acknowledgements
+
+- [Streamlit](https://streamlit.io/)
+- [LangChain](https://python.langchain.com/)
+- [Google Maps API](https://developers.google.com/maps/documentation/places/web-service/overview)
+- [Google Search API](https://developers.google.com/custom-search/v1/overview)
+- [Gemini 2.5](https://cloud.google.com/vertex-ai/docs/generative-ai/learn/models)
+
+---
+
+**Good luck, judges and hackers! 🎉**
