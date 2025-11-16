@@ -1,0 +1,8 @@
+langchain
+langchain-core
+langchain-google-genai
+langchain-community
+google-api-python-client
+requests
+streamlit
+streamlit-geolocation
