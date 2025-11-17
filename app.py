@@ -12,81 +12,78 @@ import numpy as np
 from scipy.io.wavfile import write as write_wav
 import io
 import base64
+import pandas as pd
+from geopy.distance import great_circle
 
 # --- 1. CUSTOM LANGCHAIN RETRIEVER FOR POIS ---
-# [Retriever class remains the same as before]
 class GoogleMapsPOIRetriever(BaseRetriever):
     """
     Custom LangChain Retriever that:
-    4. Returns these snippets as LangChain `Document` objects.
+    1. Takes a user's location (lat, long) and a query (e.g., "restaurants").
+    2. Fetches POIs from the Google Maps Places API (Nearby Search), including coordinates.
+    3. Calculates the distance from the user to each POI.
+    4. For each POI, fetches a descriptive snippet from Google Search.
+    5. Returns these snippets and data as LangChain `Document` objects.
     """
-    latitude: float
-    longitude: float
+    user_latitude: float
+    user_longitude: float
     maps_api_key: str
     search_api_key: str
     cse_id: str
     radius: int = 1500  # 1.5km radius
-    
+
     def _get_pois_from_maps(self, query: str) -> List[Dict[str, Any]]:
         """
-        REAL FUNCTION: Calls the Google Maps API.
+        Fetches POIs from Google Maps Nearby Search.
+        Now we will make a real API call.
         """
-        # We use st.write for logging in Streamlit
-        st.write(f"--- [Maps API] Searching for '{query}' near ({self.latitude}, {self.longitude}) ---")
-        
+        print(f"--- [Google Maps API] Searching for '{query}' near ({self.user_latitude}, {self.user_longitude}) ---")
         url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
         params = {
-            "location": f"{self.latitude},{self.longitude}",
+            "location": f"{self.user_latitude},{self.user_longitude}",
             "radius": self.radius,
             "keyword": query,
             "key": self.maps_api_key
         }
-        
         try:
             response = requests.get(url, params=params)
-            response.raise_for_status()  # Raise an exception for bad status codes
-            data = response.json()
-            
-            if data.get("status") == "OK":
-                return data.get("results", [])
+            response.raise_for_status()  # Raise an error for bad responses
+            results = response.json()
+            if results.get("status") == "OK":
+                return results.get("results", [])
             else:
-                st.error(f"Maps API Error: {data.get('status')} - {data.get('error_message', '')}")
+                st.error(f"Google Maps API Error: {results.get('status')} - {results.get('error_message', '')}")
                 return []
         except requests.exceptions.RequestException as e:
-            st.error(f"HTTP Request failed: {e}")
+            st.error(f"HTTP Error calling Google Maps: {e}")
             return []
 
     def _get_search_snippet(self, poi_name: str, vicinity: str) -> str:
         """
-        NEW FUNCTION: Uses direct 'requests' to call the Google Search API.
-        This bypasses the LangChain wrapper.
+        Uses Google Search API to get a snippet for a POI.
         """
-        st.write(f"--- [Direct Search API] Searching for snippet: '{poi_name} {vicinity}' ---")
+        print(f"--- [Google Search API] Searching for snippet: '{poi_name} {vicinity}' ---")
+        url = "https://www.googleapis.com/customsearch/v1"
+        params = {
+            "key": self.search_api_key,
+            "cx": self.cse_id,
+            "q": f"{poi_name} {vicinity}",
+            "num": 1
+        }
         try:
-            url = "https://www.googleapis.com/customsearch/v1"
-            params = {
-                "key": self.search_api_key,
-                "cx": self.cse_id,
-                "q": f"{poi_name} {vicinity}",
-                "num": 1
-            }
             response = requests.get(url, params=params)
             response.raise_for_status()
-            data = response.json()
-
-            # Check if 'items' exists and has at least one result
-            if "items" in data and len(data["items"]) > 0:
-                snippet = data["items"][0].get("snippet", "No description found.")
-                st.write(f"--- [Direct Search API] Found: {snippet} ---")
-                return snippet
+            results = response.json()
+            if "items" in results and len(results["items"]) > 0:
+                return results["items"][0].get("snippet", "No description found.")
             else:
-                st.write(f"--- [Direct Search API] No items found for query. ---")
+                st.write(f"No items found for query: {poi_name}")
                 return "No description found."
         except requests.exceptions.RequestException as e:
-            st.error(f"HTTP Request to Search API failed: {e}")
+            st.error(f"HTTP Error calling Google Search: {e}")
             return "Error fetching description."
         except Exception as e:
-            st.error(f"Error parsing Search API response: {e}")
+            st.error(f"Error processing search snippet: {e}")
             return "Error fetching description."
 
     def _get_relevant_documents(self, query: str) -> List[Document]:
@@ -97,260 +94,257 @@ class GoogleMapsPOIRetriever(BaseRetriever):
         pois = self._get_pois_from_maps(query)
         
         documents = []
+        user_location = (self.user_latitude, self.user_longitude)
+        
         for poi in pois:
             poi_name = poi.get("name", "Unknown Place")
             vicinity = poi.get("vicinity", "")
             
-            # 2. Augment: For each POI, get a descriptive snippet
+            # 2. Get POI Location and Calculate Distance
+            poi_location_data = poi.get("geometry", {}).get("location", {})
+            poi_lat = poi_location_data.get("lat")
+            poi_lon = poi_location_data.get("lng")
+            
+            distance_km = "N/A"
+            if poi_lat and poi_lon:
+                poi_location = (poi_lat, poi_lon)
+                # Calculate distance using geopy's great_circle
+                distance_km = f"{great_circle(user_location, poi_location).km:.1f}"
+
+            # 3. Augment: For each POI, get a descriptive snippet
             snippet = self._get_search_snippet(poi_name, vicinity)
             
-            # 3. Create a LangChain Document
+            # 4. Create a LangChain Document
             doc = Document(
                 page_content=snippet,
                 metadata={
                     "poi_name": poi_name,
                     "address": vicinity,
-                    "source": "google_maps_and_direct_search"
+                    "source": "google_maps_and_search",
+                    "distance_km": distance_km,
+                    "latitude": poi_lat,
+                    "longitude": poi_lon
                 }
             )
             documents.append(doc)
             
         return documents
 
-# --- 2. HELPER FUNCTION ---
+# --- 2. RAG CONTEXT FORMATTING ---
 def format_docs_for_prompt(docs: List[Document]) -> str:
     """
     Formats the retrieved documents into a clean string for the prompt.
+    NOW INCLUDES DISTANCE.
     """
     if not docs:
         return "No information found for that query."
         
     return "\n\n".join(
-        f"**{doc.metadata.get('poi_name', 'Unknown Place')}**\nAddress: {doc.metadata.get('address', 'N/A')}\nSummary: {doc.page_content}"
+        f"**{doc.metadata.get('poi_name', 'Unknown Place')}** (Distance: {doc.metadata.get('distance_km', 'N/A')} km)\n"
+        f"Address: {doc.metadata.get('address', 'N/A')}\n"
+        f"Summary: {doc.page_content}"
         for doc in docs
     )
 
-# --- 3. CACHED RAG CHAIN FUNCTION ---
-# [get_rag_response function remains the same as before]
-@st.cache_data
-def get_rag_response(_gemini_key, _maps_key, _search_key, _cse_id, latitude, longitude, query):
+# --- 3. THE RAG "BRAIN" (CACHED) ---
+@st.cache_data(show_spinner=False)
+def get_rag_response(_query, _latitude, _longitude, _keys):
     """
-    This function initializes all components and runs the RAG chain.
+    Runs the entire RAG chain.
+    NOTE: We now call the retriever *first* to get the docs for the map,
+    then we pass those docs to the rest of the chain.
     """
-    try:
-        # 1. Instantiate LLM (The "G" in RAG)
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            temperature=0.7,
-            google_api_key=_gemini_key
-        )
-        
-        # 2. Instantiate Retriever (The "R" in RAG)
-        # We NO LONGER create the SearchWrapper. We pass the keys directly.
-        retriever = GoogleMapsPOIRetriever(
-            latitude=latitude,
-            longitude=longitude,
-            maps_api_key=_maps_key,
-            search_api_key=_search_key,
-            cse_id=_cse_id
-        )
-        
-        # 3. Define Prompt Template (The "A" in RAG)
-        template = """
-        You are a friendly and engaging AI tour guide.
-        Your task is to provide a short, exciting summary of Points of Interest (POIs) near the user, based *only* on the context provided.
-        
-        Do not make up any information. If the context is empty, say so.
-        
-        CONTEXT ABOUT NEARBY PLACES:
-        {context}
-        
-        YOUR TASK:
-        Write a brief, one-paragraph summary for the user, highlighting the places from the context.
-        Start with a friendly greeting!
-        """
-        prompt = PromptTemplate.from_template(template)
-        
-        # 4. Build the RAG Chain using LCEL
-        setup_and_retrieval = RunnableParallel(
-            context=(
-                RunnablePassthrough()
-                | retriever
-                # The 'format_docs_for_prompt' helper is now implicitly called inside the chain
-                | format_docs_for_prompt
-            )
-        )
-        
-        rag_chain = setup_and_retrieval | prompt | llm | StrOutputParser()
-
-        # 5. Invoke the Chain and return the result
-        return rag_chain.invoke(query)
-
-    except Exception as e:
-        st.error(f"An error occurred while running the RAG chain: {e}")
-        st.error("Please ensure all API keys are correct and all APIs are enabled in your Google Cloud project.")
-        return None
-
-# --- 4. NEW: CACHED TTS FUNCTION ---
-@st.cache_data
-def get_tts_audio(text: str, _gemini_key: str) -> bytes | None:
-    """
-    Calls the Gemini 2.5 Flash TTS model to generate audio.
-    Returns the audio data as WAV bytes.
-    """
-    st.write(f"--- [Gemini TTS] Generating audio for: '{text[:30]}...' ---")
+    # 1. Instantiate the Retriever with all keys and user location
+    retriever = GoogleMapsPOIRetriever(
+        user_latitude=_latitude,
+        user_longitude=_longitude,
+        maps_api_key=_keys["GOOGLE_MAPS_API_KEY"],
+        search_api_key=_keys["GOOGLE_SEARCH_API_KEY"],
+        cse_id=_keys["GOOGLE_CSE_ID"]
+    )
     
-    # The API returns raw 16-bit PCM data at 24000 Hz
-    SAMPLE_RATE = 24000
+    # 2. Instantiate LLM
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        temperature=0.7,
+        google_api_key=_keys["GOOGLE_API_KEY"]
+    )
     
-    # Use the v1beta endpoint for TTS
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={_gemini_key}"
+    # 3. Define Prompt Template
+    template = """
+    You are a friendly and engaging AI tour guide.
+    Your task is to provide a short, exciting summary of Points of Interest (POIs) near the user, based *only* on the context provided.
+    
+    - Use the distance information to help the user understand what's nearby.
+    - List each place as a bullet point.
+    - Start with a friendly greeting!
+    
+    CONTEXT ABOUT NEARBY PLACES:
+    {context}
+    
+    YOUR TASK:
+    Write a brief, one-paragraph summary for the user, highlighting the places from the context.
+    """
+    prompt = PromptTemplate.from_template(template)
+    
+    # 4. Define the final output parser
+    output_parser = StrOutputParser()
+    
+    # --- 5. RUN THE CHAIN IN PARTS ---
+    # This is a change: we get the docs first so we can use them for the map.
+    
+    print("--- [RAG Chain] Step 1: Retrieving documents... ---")
+    docs = retriever.invoke(_query)
+    
+    if not docs:
+        return "Sorry, I couldn't find anything for that search.", None
+    
+    print(f"--- [RAG Chain] Step 2: Found {len(docs)} documents. Formatting context... ---")
+    formatted_context = format_docs_for_prompt(docs)
+    
+    print("--- [RAG Chain] Step 3: Generating response with LLM... ---")
+    # Manually run the rest of the chain
+    chain = prompt | llm | output_parser
+    summary = chain.invoke({"context": formatted_context})
+    
+    # 6. Create Map Data
+    map_data = []
+    for doc in docs:
+        if doc.metadata.get("latitude") and doc.metadata.get("longitude"):
+            map_data.append({
+                "lat": doc.metadata["latitude"],
+                "lon": doc.metadata["longitude"]
+            })
+    
+    print("--- [RAG Chain] Step 4: Returning summary and map data. ---")
+    return summary, map_data
+
+
+# --- 4. TTS FUNCTION (CACHED) ---
+@st.cache_data(show_spinner=False)
+def get_tts_audio(_text, _api_key):
+    """
+    Calls the Gemini TTS API and returns an in-memory WAV file.
+    """
+    print("--- [TTS] Generating audio... ---")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={_api_key}"
     
     payload = {
         "contents": [{
-            "parts": [{ "text": text }]
+            "parts": [{"text": _text}]
         }],
         "generationConfig": {
             "responseModalities": ["AUDIO"],
             "speechConfig": {
                 "voiceConfig": {
-                    "prebuiltVoiceConfig": { "voiceName": "Kore" } # A friendly, firm voice
+                    "prebuiltVoiceConfig": {"voiceName": "Kore"}
                 }
             }
         },
         "model": "gemini-2.5-flash-preview-tts"
     }
-
+    
     try:
-        response = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
+        response = requests.post(url, json=payload)
         response.raise_for_status()
         result = response.json()
         
-        # Extract the base64 encoded audio data
         part = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0]
-        if "inlineData" not in part:
-            st.error(f"TTS API Error: No 'inlineData' in response. {result}")
+        audio_data = part.get("inlineData", {}).get("data")
+        mime_type = part.get("inlineData", {}).get("mimeType")
+        
+        if audio_data and mime_type and "rate=" in mime_type:
+            sample_rate = int(mime_type.split("rate=")[1])
+            # Decode the base64 audio data
+            pcm_data = base64.b64decode(audio_data)
+            # Convert raw PCM16 data to a numpy array
+            pcm_array = np.frombuffer(pcm_data, dtype=np.int16)
+            
+            # Create an in-memory WAV file
+            wav_io = io.BytesIO()
+            write_wav(wav_io, sample_rate, pcm_array)
+            wav_io.seek(0)
+            return wav_io
+        else:
+            st.error(f"Could not parse TTS response: {result}")
             return None
-
-        audio_data_base64 = part["inlineData"]["data"]
-        
-        # Decode the base64 string to raw PCM bytes
-        pcm_data = base64.b64decode(audio_data_base64)
-        
-        # Convert the raw bytes to a NumPy array of 16-bit integers
-        pcm_array = np.frombuffer(pcm_data, dtype=np.int16)
-        
-        # Create an in-memory WAV file
-        wav_buffer = io.BytesIO()
-        write_wav(wav_buffer, SAMPLE_RATE, pcm_array)
-        wav_buffer.seek(0)
-        
-        st.write("--- [Gemini TTS] Audio generated successfully. ---")
-        return wav_buffer.read()
-
     except requests.exceptions.RequestException as e:
-        st.error(f"HTTP Request to TTS API failed: {e}")
+        st.error(f"HTTP Error calling TTS API: {e}")
         return None
     except Exception as e:
-        st.error(f"Error processing TTS audio: {e}")
+        st.error(f"Error processing audio data: {e}")
         return None
 
-# --- 5. STREAMLIT UI ---
-
-st.set_page_config(layout="wide")
-st.title("🤖 AI POI Tour Guide")
-
-# --- 5. HACKATHON-READY SECURITY ---
-
-def get_api_key(key_name: str) -> str:
-    """Fetch key from st.secrets or os.environ."""
-    if hasattr(st, 'secrets') and key_name in st.secrets:
+# --- 5. HELPER FUNCTIONS ---
+def get_api_key(key_name):
+    """
+    Gets an API key from Streamlit secrets.
+    """
+    if key_name in st.secrets:
         return st.secrets[key_name]
-    return os.environ.get(key_name, "")
+    else:
+        st.error(f"API Key Error: '{key_name}' not found in Streamlit secrets.")
+        return None
 
-HACKATHON_PASSWORD = get_api_key("HACKATHON_PASSWORD")
+def clear_cache():
+    """
+    Clears the cached responses and session state.
+    """
+    st.cache_data.clear()
+    st.session_state.summary = ""
+    st.session_state.map_data = None # Clear map data
+    st.rerun()
 
-# Initialize session state for login
+# --- 6. MAIN APP UI ---
+st.set_page_config(page_title="AI POI Guide", layout="wide")
+st.title("📍 AI Point of Interest Guide")
+
+# Initialize session state
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "summary" not in st.session_state:
-    st.session_state.summary = "" # Initialize summary in session state
+    st.session_state.summary = ""
+if "map_data" not in st.session_state:
+    st.session_state.map_data = None
+if "api_keys" not in st.session_state:
+    st.session_state.api_keys = {}
 
-if HACKATHON_PASSWORD:
-    # If a password is set, show login
-    password_guess = st.sidebar.text_input("Enter Judge/Guest Password", type="password")
-    if st.sidebar.button("Login"):
-        if password_guess == HACKATHON_PASSWORD:
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.sidebar.error("Incorrect password.")
-else:
-    # If no password is set, just run the app (good for local dev)
-    st.session_state.authenticated = True
+# --- 7. SIDEBAR & AUTHENTICATION ---
+with st.sidebar:
+    st.header("Authentication")
+    password = st.text_input("Enter Password", type="password")
+    
+    if password == get_api_key("HACKATHON_PASSWORD"):
+        st.session_state.authenticated = True
+        st.success("Authenticated!")
+        
+        # Load all keys into session state *once*
+        st.session_state.api_keys = {
+            "GOOGLE_API_KEY": get_api_key("GOOGLE_API_KEY"),
+            "GOOGLE_MAPS_API_KEY": get_api_key("GOOGLE_MAPS_API_KEY"),
+            "GOOGLE_SEARCH_API_KEY": get_api_key("GOOGLE_SEARCH_API_KEY"),
+            "GOOGLE_CSE_ID": get_api_key("GOOGLE_CSE_ID")
+        }
+    elif password:
+        st.error("Incorrect password.")
 
-# --- 6. MAIN APPLICATION (Only if authenticated) ---
-
+# --- 8. MAIN APP LOGIC (Protected) ---
 if st.session_state.authenticated:
-    st.sidebar.success("Authenticated!")
-    st.subheader("Your RAG-powered guide to nearby places")
-
-    # --- API Key Management (Sidebar) ---
-    st.sidebar.header("API Key Configuration (Optional Override)")
-    st.sidebar.markdown(
-        "Keys can be set in `st.secrets` for deployment. "
-        "You can override them here for local testing."
-    )
-
-    # Use session_state to hold keys, initialized from st.secrets or env
-    if "GOOGLE_API_KEY" not in st.session_state:
-        st.session_state.GOOGLE_API_KEY = get_api_key("GOOGLE_API_KEY")
-    if "GOOGLE_MAPS_API_KEY" not in st.session_state:
-        st.session_state.GOOGLE_MAPS_API_KEY = get_api_key("GOOGLE_MAPS_API_KEY")
-    if "GOOGLE_SEARCH_API_KEY" not in st.session_state:
-        st.session_state.GOOGLE_SEARCH_API_KEY = get_api_key("GOOGLE_SEARCH_API_KEY")
-    if "GOOGLE_CSE_ID" not in st.session_state:
-        st.session_state.GOOGLE_CSE_ID = get_api_key("GOOGLE_CSE_ID")
-
-    st.session_state.GOOGLE_API_KEY = st.sidebar.text_input(
-        "Gemini API Key", 
-        value=st.session_state.GOOGLE_API_KEY, 
-        type="password"
-    )
-    st.session_state.GOOGLE_MAPS_API_KEY = st.sidebar.text_input(
-        "Google Maps API Key", 
-        value=st.session_state.GOOGLE_MAPS_API_KEY, 
-        type="password"
-    )
-    st.session_state.GOOGLE_SEARCH_API_KEY = st.sidebar.text_input(
-        "Google Search API Key", 
-        value=st.session_state.GOOGLE_SEARCH_API_KEY, 
-        type="password"
-    )
-    st.session_state.GOOGLE_CSE_ID = st.sidebar.text_input(
-        "Google Search CSE ID", 
-        value=st.session_state.GOOGLE_CSE_ID, 
-        type="password"
-    )
-
-    # Check if all keys are provided
-    all_keys_provided = all([
-        st.session_state.GOOGLE_API_KEY,
-        st.session_state.GOOGLE_MAPS_API_KEY,
-        st.session_state.GOOGLE_SEARCH_API_KEY,
-        st.session_state.GOOGLE_CSE_ID
-    ])
-
+    
+    # Check if all keys are loaded
+    all_keys_provided = all(st.session_state.api_keys.values())
+    
     if all_keys_provided:
-        st.sidebar.success("All API keys are configured.")
+        with st.sidebar:
+            st.success("All API keys are configured.")
     else:
-        st.sidebar.error("Please provide all 4 API keys/IDs.")
+        with st.sidebar:
+            st.error("Please provide all 4 API keys/IDs in your secrets.")
 
     # --- Main Application Area ---
     st.markdown("Enter your coordinates manually, or use the defaults for Dubai.")
 
-    # --- RE-ADDED: Manual Latitude and Longitude Input ---
-    default_location = {"latitude": 25.2048, "longitude": 55.2708}
+    default_location = {"latitude": 25.2048, "longitude": 55.2708} # Default: Dubai
 
     col1, col2 = st.columns(2)
     with col1:
@@ -367,50 +361,61 @@ if st.session_state.authenticated:
         )
     
     st.success(f"Using location: ({latitude}, {longitude})")
+    
     query = st.text_input("What are you looking for?", "museums")
-
-    if st.button("Explore Nearby!"):
-        if not all_keys_provided:
-            st.error("Please configure all API keys in the sidebar first.")
-        else:
-            with st.spinner("Finding POIs, augmenting with data, and generating a summary..."):
-                # Call the cached function
-                response = get_rag_response(
-                    st.session_state.GOOGLE_API_KEY,
-                    st.session_state.GOOGLE_MAPS_API_KEY,
-                    st.session_state.GOOGLE_SEARCH_API_KEY,
-                    st.session_state.GOOGLE_CSE_ID,
-                    latitude,
-                    longitude,
-                    query
-                )
-                
-                if response:
-                    st.markdown("### Your AI Tour Guide Summary")
-                    st.markdown(response)
-                    st.session_state.summary = response # Store summary for TTS
-                    
-                    if st.button("Clear Cache"):
-                        st.cache_data.clear()
-                        st.success("Cache cleared!")
-                        st.session_state.summary = "" # Clear summary on cache clear
-                else:
-                    st.session_state.summary = "" # Clear summary on error
-
-    # --- NEW: TTS Playback Section ---
+    
+    if st.button("Explore Nearby!") and all_keys_provided:
+        with st.spinner("Finding POIs, calculating distances, and building your summary..."):
+            summary, map_data = get_rag_response(
+                query,
+                latitude,
+                longitude,
+                st.session_state.api_keys
+            )
+        st.session_state.summary = summary
+        st.session_state.map_data = map_data
+        st.rerun() # Re-run to update the UI
+            
+    # --- 9. DISPLAY RESULTS (if they exist) ---
     if st.session_state.summary:
+        
+        # --- NEW: Display the Map ---
+        if st.session_state.map_data:
+            st.subheader("Map of Nearby Locations")
+            try:
+                df = pd.DataFrame(st.session_state.map_data)
+                df = df.dropna(subset=['lat', 'lon']) # Ensure no bad data
+                if not df.empty:
+                    st.map(df, zoom=12) # Display the map, zoomed in
+                else:
+                    st.warning("Could not display map - no valid coordinates found.")
+            except Exception as e:
+                st.error(f"Error creating map: {e}")
+        
+        st.markdown("### Your AI Tour Guide Summary")
+        st.markdown(st.session_state.summary)
+        
         st.divider()
+        
+        # --- TTS Section ---
         if st.button("Click to Listen to Summary"):
-            with st.spinner("Generating audio..."):
-                audio_bytes = get_tts_audio(
-                    st.session_state.summary, 
-                    st.session_state.GOOGLE_API_KEY
-                )
-                if audio_bytes:
-                    st.audio(audio_bytes, format="audio/wav")
+            if all_keys_provided:
+                with st.spinner("Generating audio..."):
+                    audio_file = get_tts_audio(
+                        st.session_state.summary, 
+                        st.session_state.api_keys["GOOGLE_API_KEY"]
+                    )
+                if audio_file:
+                    st.audio(audio_file, format="audio/wav")
                 else:
                     st.error("Sorry, I could not generate the audio for that summary.")
+            else:
+                st.error("Cannot generate audio, missing API key.")
+        
+        # --- Clear Cache Button ---
+        st.divider()
+        if st.button("Clear Cache & Start Over"):
+            clear_cache()
+
 else:
     st.warning("Please enter the password in the sidebar to use the app.")
-
- 
