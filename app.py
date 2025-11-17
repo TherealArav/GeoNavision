@@ -3,7 +3,6 @@ import streamlit as st
 import requests
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnablePassthrough, RunnableParallel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -14,7 +13,9 @@ import io
 import base64
 import pandas as pd
 from geopy.distance import great_circle
+from dotenv import load_dotenv
 
+load_dotenv()
 # --- 1. CUSTOM LANGCHAIN RETRIEVER FOR POIS ---
 class GoogleMapsPOIRetriever(BaseRetriever):
     """
@@ -276,15 +277,26 @@ def get_tts_audio(_text, _api_key):
         return None
 
 # --- 5. HELPER FUNCTIONS ---
+
+# --- UPDATED get_api_key function ---
 def get_api_key(key_name):
     """
-    Gets an API key from Streamlit secrets.
+    Gets an API key from two places, in order:
+    1. Streamlit secrets (st.secrets) - for deployment
+    2. Environment variables (.env file) - for local testing
     """
+    # 1. Try Streamlit secrets (for deployment)
     if key_name in st.secrets:
         return st.secrets[key_name]
-    else:
-        st.error(f"API Key Error: '{key_name}' not found in Streamlit secrets.")
-        return None
+    
+    # 2. Try .env file (for local testing)
+    key_value = os.environ.get(key_name)
+    if key_value:
+        return key_value
+    
+    # 3. If nothing works, fail
+    st.error(f"API Key Error: '{key_name}' not found in st.secrets or .env file.")
+    return None
 
 def clear_cache():
     """
@@ -314,7 +326,10 @@ with st.sidebar:
     st.header("Authentication")
     password = st.text_input("Enter Password", type="password")
     
-    if password == get_api_key("HACKATHON_PASSWORD"):
+    # Use the new get_api_key function to find the password
+    hackathon_password = get_api_key("HACKATHON_PASSWORD")
+    
+    if hackathon_password and password == hackathon_password:
         st.session_state.authenticated = True
         st.success("Authenticated!")
         
@@ -332,6 +347,7 @@ with st.sidebar:
 if st.session_state.authenticated:
     
     # Check if all keys are loaded
+    # A bit redundant since get_api_key will error, but good for UX
     all_keys_provided = all(st.session_state.api_keys.values())
     
     if all_keys_provided:
@@ -339,7 +355,8 @@ if st.session_state.authenticated:
             st.success("All API keys are configured.")
     else:
         with st.sidebar:
-            st.error("Please provide all 4 API keys/IDs in your secrets.")
+            # The get_api_key function will already be showing a specific error
+            st.error("One or more API keys/IDs are missing.")
 
     # --- Main Application Area ---
     st.markdown("Enter your coordinates manually, or use the defaults for Dubai.")
