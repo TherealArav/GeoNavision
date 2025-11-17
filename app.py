@@ -15,7 +15,9 @@ import pandas as pd
 from geopy.distance import great_circle
 from dotenv import load_dotenv
 
+
 load_dotenv()
+
 # --- 1. CUSTOM LANGCHAIN RETRIEVER FOR POIS ---
 class GoogleMapsPOIRetriever(BaseRetriever):
     """
@@ -58,6 +60,7 @@ class GoogleMapsPOIRetriever(BaseRetriever):
         except requests.exceptions.RequestException as e:
             st.error(f"HTTP Error calling Google Maps: {e}")
             return []
+
 
     def _get_search_snippet(self, poi_name: str, vicinity: str) -> str:
         """
@@ -164,6 +167,7 @@ def get_rag_response(_query, _latitude, _longitude, _keys):
         cse_id=_keys["GOOGLE_CSE_ID"]
     )
     
+    
     # 2. Instantiate LLM
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash",
@@ -173,7 +177,7 @@ def get_rag_response(_query, _latitude, _longitude, _keys):
     
     # 3. Define Prompt Template
     template = """
-    You are a friendly and engaging AI tour guide.
+    You are a friendly and engaging AI guide.
     Your task is to provide a short, exciting summary of Points of Interest (POIs) near the user, based *only* on the context provided.
     
     - Use the distance information to help the user understand what's nearby.
@@ -409,7 +413,7 @@ if st.session_state.authenticated:
             except Exception as e:
                 st.error(f"Error creating map: {e}")
         
-        st.markdown("### Your AI Tour Guide Summary")
+        st.markdown("### Your AI Guide Summary")
         st.markdown(st.session_state.summary)
         
         st.divider()
