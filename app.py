@@ -1,8 +1,5 @@
 import os
 import streamlit as st
-from streamlit_geolocation import streamlit_geolocation
-import folium
-from streamlit_folium import st_folium
 import requests
 import time
 import csv
@@ -14,6 +11,10 @@ from typing import List, Dict, Any, Optional
 from pydantic import Field, ConfigDict
 from geopy.distance import great_circle
 from dotenv import load_dotenv
+from utilities import parse_markdown_table
+from storage import QueryStorage
+
+# LangChain Imports
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -21,10 +22,13 @@ from langchain_core.documents import Document
 from langchain_google_genai import ChatGoogleGenerativeAI
 from scipy.io.wavfile import write as write_wav
 
+# Geolocation & Mapping
+from streamlit_geolocation import streamlit_geolocation
+import folium
+from streamlit_folium import st_folium
 
 load_dotenv()
 
-# --- 1. ROBUST RETRIEVER ---
 class GoogleMapsPOIRetriever(BaseRetriever):
     user_latitude: float
     user_longitude: float
@@ -37,96 +41,169 @@ class GoogleMapsPOIRetriever(BaseRetriever):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def _get_pois_from_maps(self, query: str) -> List[Dict[str, Any]]:
-        url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-        params = {
-            "location": f"{self.user_latitude},{self.user_longitude}",
-            "radius": self.radius,
-            "keyword": query,
-            "key": self.maps_api_key,
+    def _get_pois_from_places_new(self, query: str) -> List[Dict[str, Any]]:
+        """
+        Uses searchText to find POIs.
+        """
+        # Endpoint for Text-based searching in the  API
+        url = "https://places.googleapis.com/v1/places:searchText"
+        
+        headers = {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": self.maps_api_key,
+            "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.accessibilityOptions"
         }
+        
+        # We use locationBias to find results near the user
+        payload = {
+            "textQuery": query,
+            "locationBias": {
+                "circle": {
+                    "center": {
+                        "latitude": self.user_latitude,
+                        "longitude": self.user_longitude
+                    },
+                    "radius": float(self.radius)
+                }
+            },
+            "maxResultCount": 10
+        }
+
         try:
             start = time.time()
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
             self.map_latency = time.time() - start
+            
+            if response.status_code != 200:
+                st.error(f"Google API Error ({response.status_code}): {response.text}")
+                return []
+                
             res = response.json()
-            return res.get("results", []) if res.get("status") == "OK" else []
-        except: return []
-    
-    def _get_accessibility_from_map(self, place_id: str) -> dict[str, Any]:
-        """Get accessibility info from Google Maps API"""
-        url = "https://maps.googleapis.com/maps/api/place/details/json"
-        
-        params = {
-            "place_id": place_id,
-            "fields": "wheelchair_accessible_entrance,wheelchair_accessible_restroom",
-            "key": self.maps_api_key
-        }
-        try:
-            response = requests.get(url, params=params, timeout=5)
-            res = response.json()
-            if res.get("status") == "OK":
-                accessibility = res.get("result", {})
-                return {
-                    "wheelchair_accessible_entrance": accessibility.get("wheelchair_accessible_entrance"),
-                    "wheelchair_accessible_restroom": accessibility.get("wheelchair_accessible_restroom")
-                }
-            else:
-                return {}
-        except:
-            return {}
-
-
-
-
+            places = res.get("places", [])
+            
+            # Debugging: Show count in the console/logs
+            return places
+        except Exception as e:
+            st.error(f"Request Exception: {e}")
+            return []
 
     def _get_search_snippet(self, poi_name: str, vicinity: str) -> str:
+        """
+        Fetch web context using Google Custom Search
+        """
+
         url = "https://www.googleapis.com/customsearch/v1"
-        params = {"key": self.search_api_key, "cx": self.cse_id, "q": f"{poi_name} {vicinity}", "num": 1}
+        params = {"key": self.search_api_key, 
+                  "cx": self.cse_id, 
+                  "q": f"{poi_name} {vicinity}", "num": 1
+                  }
         try:
             start = time.time()
             response = requests.get(url, params=params, timeout=5)
             self.search_latencies.append(time.time() - start)
             res = response.json()
-            return res["items"][0].get("snippet", "No info.") if "items" in res else "No info."
-        except: return "Search error."
+            if "items" in res and len(res["items"]) > 0:
+                return res["items"][0].get("snippet", "No web info found.")
+            
+            return "No additional web context found."
+        
+        except Exception as e:
+            return f"Web search error: {str(e)}"
 
     def _get_relevant_documents(self, query: str) -> List[Document]:
+        """
+        Process results into LangChain documents
+        """
         self.map_latency = 0.0
         self.search_latencies = []
-        pois = self._get_pois_from_maps(query)
+        
+        places = self._get_pois_from_places_new(query)
         docs = []
         user_loc = (self.user_latitude, self.user_longitude)
 
-        for poi in pois[:5]: 
-            place_id = poi.get("place_id")
-            loc = poi["geometry"]["location"]
-            p_lat, p_lng = loc["lat"], loc["lng"]
-            dist = f"{great_circle(user_loc, (p_lat, p_lng)).km:.2f}"
-            snippet = self._get_search_snippet(poi.get("name"), poi.get("vicinity"))
-            accessible_info = self._get_accessibility_from_map(place_id)
-            is_accessible_entrance = accessible_info.get("wheelchair_accessible_entrance", "Unknown")
-            is_accessible_restroom = accessible_info.get("wheelchair_accessible_restroom", "Unknown")
-            snippet += f" Accessibility - Entrance: {is_accessible_entrance}, Restroom: {is_accessible_restroom}."
-            docs.append(Document(
-                page_content=snippet,
-                metadata={
-                    "poi_name": poi.get("name"),
-                    "address": poi.get("vicinity"),
-                    "distance_km": dist,
-                    "latitude": p_lat,
-                    "longitude": p_lng
-                }
-            ))
+        for poi in places: 
+            name = poi.get("displayName", {}).get("text", "Unknown Place")
+            address = poi.get("formattedAddress", "No address available")
+            loc = poi.get("location", {})
+            p_lat, p_lng = loc.get("latitude"), loc.get("longitude")
+            
+            acc = poi.get("accessibilityOptions", {})
+            wheelchair_entrance = acc.get("wheelchairAccessibleEntrance", "Unknown")
+            wheelchair_restroom = acc.get("wheelchairAccessibleRestroom", "Unknown")
+            
+            if p_lat and p_lng:
+                dist = f"{great_circle(user_loc, (p_lat, p_lng)).km:.2f}"
+                snippet = self._get_search_snippet(name, address)
+                
+                # Combine search snippet with accessibility facts for the LLM
+                content = f"Name: {name}. Distance: {dist}km. {snippet} Accessibility Info - Entrance: {wheelchair_entrance}, Restroom: {wheelchair_restroom}."
+                
+                docs.append(Document(
+                    page_content=content,
+                    metadata={
+                        "poi_name": name,
+                        "address": address,
+                        "distance_km": dist,
+                        "latitude": p_lat,
+                        "longitude": p_lng,
+                        "wheelchair": wheelchair_entrance
+                    }
+                ))
         return docs
 
-
+# Utility Functions
 def get_directions_url(dest_lat, dest_lon):
+    """
+    Generate Google Maps directions link
+    """
     return f"https://www.google.com/maps/dir/?api=1&destination={dest_lat},{dest_lon}"
 
-# --- 2. THE RAG BRAIN ---
-@st.cache_data(show_spinner=False)
+def apply_custom_css() -> None:
+    """
+    Apply custom CSS styles to app
+    """
+    custom_css = """
+        <style>
+        /* --- 1. GLOBAL SCROLLBAR REMOVAL --- */
+        /* Hide scrollbars globally for Chrome, Safari and Opera */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        /* Hide scrollbars globally for IE, Edge and Firefox */
+        * {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+
+        /* --- 2. THEME & CONTAINER STYLING --- */
+        .main { background-color: #fcfcfc; }
+        
+        .stButton>button {
+            width: 100%;
+            border-radius: 12px;
+            padding: 10px 24px;
+            margin-top: 12px;
+            background-color: #FF4B4B;
+            color: white;
+            font-weight: 600;
+            border: none;
+            transition: all 0.3s ease;
+        }
+        .stButton>button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 75, 75, 0.3);
+        }
+
+        </style>
+    """
+    st.markdown(custom_css, unsafe_allow_html=True)
+
+
+# @st.cache_data(show_spinner=False)
 def get_rag_response(_query, _lat, _lon, _keys):
+    """
+    Execute RAG chain and cache results
+    """
     retriever = GoogleMapsPOIRetriever(
         user_latitude=_lat, user_longitude=_lon,
         maps_api_key=_keys["GOOGLE_MAPS_API_KEY"],
@@ -134,18 +211,24 @@ def get_rag_response(_query, _lat, _lon, _keys):
         cse_id=_keys["GOOGLE_CSE_ID"]
     )
     
-    # Updated to the correct model name for this environment
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash-preview-09-2025", 
         google_api_key=_keys["GOOGLE_API_KEY"]
     )
     
-    template = """You are a helpful local guide. Summarize these places based on the context:
+    template = """You are a helpful accessibility consultant. 
+    Summarize these places based on the context provided. 
+    If a place is listed, identify it clearly. *If no relevant info exists, say no.*
+    Generate the summary in a tabular format with columns: Place Name, Distance (km), Accessibility Features, Additional Information.
+    
     Context: {context}
     User Query: {question}"""
     
     prompt = PromptTemplate.from_template(template)
     docs = retriever.invoke(_query)
+    
+    if not docs:
+        return "I couldn't find any specific places matching your search in this area.", []
     
     formatted_context = "\n".join([f"{d.metadata['poi_name']} ({d.metadata['distance_km']}km): {d.page_content}" for d in docs])
     
@@ -154,48 +237,54 @@ def get_rag_response(_query, _lat, _lon, _keys):
     
     return summary, docs
 
+# UI IMPLEMENTATION 
+st.set_page_config(page_title="Accessibility Guide", layout="wide")
+apply_custom_css()
+st.title("Local Accessibility Explorer")
 
-# --- 3. UI IMPLEMENTATION ---
-st.set_page_config(page_title="Geo-AI Guide", layout="wide")
-st.title("Local AI Explorer")
-
-# Initialize State
+# Manage session states
 if "user_lat" not in st.session_state: st.session_state.user_lat = 25.2048
 if "user_lon" not in st.session_state: st.session_state.user_lon = 55.2708
 if "auth" not in st.session_state: st.session_state.auth = False
+if "summary" not in st.session_state: st.session_state.summary = ""
+if "docs" not in st.session_state: st.session_state.docs = []
 
-# Sidebar Password
+# Manage authentification
 with st.sidebar:
-    pw = st.text_input("Hackathon Password", type="password")
+    pw = st.text_input("Password", type="password")
     if pw == os.environ.get("HACKATHON_PASSWORD"):
-        st.session_state.auth = True
         st.success("Authenticated")
+        st.session_state.auth = True
 
+# Main Application
 if st.session_state.auth:
     st.write("### 1. Set Location")
     
-    # Geolocation Expander to avoid blocking the UI
-    with st.expander("Auto-detect via GPS"):
-        location = streamlit_geolocation()
-        if location and location.get("latitude"):
-            if round(st.session_state.user_lat, 4) != round(location["latitude"], 4):
-                st.session_state.user_lat = location["latitude"]
-                st.session_state.user_lon = location["longitude"]
-                st.success("GPS Location Synced!")
-                st.rerun()
-
+    # with st.expander("Auto-detect via GPS"):
+    #     # Get user geolocation
+    #     if st.button("Sync GPS Location"):
+    #         location = streamlit_geolocation()
+    #         if location and location.get("latitude") and location.get("longitude"):
+    #             if round(st.session_state.user_lat, 4) != round(location["latitude"], 4) and round(st.session_state.user_lon, 4) != round(location["longitude"], 4):
+    #                 st.session_state.user_lat = location["latitude"]
+    #                 st.session_state.user_lon = location["longitude"]
+    #                 st.success("GPS Location Synced!")
+    #                 st.rerun()
+           
     c1, c2 = st.columns(2)
     lat_input = c1.number_input("Latitude", value=float(st.session_state.user_lat), format="%.6f")
     lon_input = c2.number_input("Longitude", value=float(st.session_state.user_lon), format="%.6f")
     
-    # Update state only if manually changed
     if lat_input != st.session_state.user_lat or lon_input != st.session_state.user_lon:
         st.session_state.user_lat = lat_input
         st.session_state.user_lon = lon_input
 
-    query = st.text_input("Search Nearby (e.g., 'Best Parks')", "Super Markets")
+    query = st.text_input("Search Nearby", "Super Markets")
 
     if st.button("Run Exploration"):
+        st.session_state.summary = ""
+        st.session_state.docs = []
+        
         keys = {
             "GOOGLE_API_KEY": os.environ.get("GOOGLE_API_KEY"),
             "GOOGLE_MAPS_API_KEY": os.environ.get("GOOGLE_MAPS_API_KEY"),
@@ -203,65 +292,46 @@ if st.session_state.auth:
             "GOOGLE_CSE_ID": os.environ.get("GOOGLE_CSE_ID")
         }
         
-        with st.spinner("Processing RAG Pipeline..."):
+        with st.spinner("Analyzing neighborhood..."):
             try:    
-                summary, map_info = get_rag_response(query, st.session_state.user_lat, st.session_state.user_lon, keys)
+                st.session_state.summary, st.session_state.docs = get_rag_response(query, st.session_state.user_lat, st.session_state.user_lon, keys)
                 st.divider()
                 st.subheader("AI Guide Results")
-                st.markdown(summary)
-                if map_info:
-                    st.subheader("Map of Locations")
-                    m = folium.Map(
-                        location=[st.session_state.user_lat, st.session_state.user_lon],
-                        zoom_start=15,
-                        control_scale=True
-                    )
+                st.markdown(st.session_state.summary)
+                st.divider()
 
+                # Map Visualization
+                if st.session_state.docs:
+                    st.subheader("Interactive Map")
+                    m = folium.Map(location=[st.session_state.user_lat, st.session_state.user_lon], zoom_start=15)
+
+                    # Define user location marker
                     folium.Marker(
                         [st.session_state.user_lat, st.session_state.user_lon],
-                        popup="You are here",
-                        tooltip="Your Location",
+                        popup="Current Position",
                         icon=folium.Icon(color="blue", icon="user", prefix="fa")
                     ).add_to(m)
 
-                    # Loop through map points and add markers
-                    for point in map_info:
-                        lat :float = point.metadata.get("latitude")
-                        lon :float = point.metadata.get("longitude")
-                        name :str = point.metadata.get("poi_name")
-                        snippet :str = point.page_content
-                        dist :float = point.metadata.get("distance_km", "N/A")
-                        directions_link :str = get_directions_url(lat, lon)
-
-                        # Construct HTML for the popup inside the loop
-                        # We use standard HTML tags for styling inside the bubble
-                        html_popup = f"""
-                        <div style="font-family: 'Arial', sans-serif; width: 200px;">
-                            <h4 style="margin-bottom: 5px; color: #d35400;">{name}</h4>
-                            <p style="font-size: 12px; color: #7f8c8d; margin-top: 0;">{dist} km away</p>
-                            <p style="font-size: 13px; line-height: 1.4;">{snippet}</p>
-                            <a href="{directions_link}" target="_blank" 
-                            style="display: block; text-align: center; background-color: #e67e22; 
-                                    color: white; padding: 8px; border-radius: 5px; 
-                                    text-decoration: none; font-weight: bold; margin-top: 10px;">
-                              Get Directions
-                            </a>
+                    for d in st.session_state.docs:
+                        maps_link = get_directions_url(d.metadata['latitude'], d.metadata['longitude'])
+                        popup_html = f"""
+                        <div style="font-family: Arial; width: 200px;">
+                            <b>{d.metadata['poi_name']}</b><br>
+                            Distance: {d.metadata['distance_km']} km<br>
+                            Accessibility: {d.metadata['wheelchair']}<br>
+                            <a href='{maps_link}' target='_blank'>Get Directions</a>
                         </div>
                         """
-                        iframe = folium.IFrame(html=html_popup, width=220, height=180)
-                        popup = folium.Popup(iframe, max_width=220)
-
                         folium.Marker(
-                            [lat, lon],
-                            popup=popup,
-                            tooltip=name,
+                            [d.metadata['latitude'], d.metadata['longitude']],
+                            popup=folium.Popup(popup_html, max_width=250),
                             icon=folium.Icon(color="orange", icon="location-dot", prefix="fa")
                         ).add_to(m)
-
-                    st_folium(m, width=700, height=500, returned_objects=[])                       
+                    
+                    # Display the map at the center
+                    st_folium(m,use_container_width= True,height=600,returned_objects=[])
 
             except Exception as e:
                 st.error(f"Error: {e}")
-
 else:
-    st.info("Please enter the authentication password in the sidebar.")
+    st.info("Please enter the password in the sidebar.")
