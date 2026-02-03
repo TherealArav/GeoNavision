@@ -12,7 +12,7 @@ from pydantic import Field, ConfigDict
 from geopy.distance import great_circle
 from dotenv import load_dotenv
 from utilities import parse_markdown_table
-from storage import QueryStorage
+# from storage import QueryStorage
 
 # LangChain Imports
 from langchain_core.retrievers import BaseRetriever
