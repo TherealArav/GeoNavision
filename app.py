@@ -6,13 +6,14 @@ import csv
 import numpy as np
 import io
 import base64
+import json
 import pandas as pd
 from typing import List, Dict, Any, Optional
 from pydantic import Field, ConfigDict
 from geopy.distance import great_circle
 from dotenv import load_dotenv
 from utilities import parse_markdown_table
-# from storage import QueryStorage
+from storage import QueryStorage
 
 # LangChain Imports
 from langchain_core.retrievers import BaseRetriever
@@ -284,54 +285,81 @@ if st.session_state.auth:
     if st.button("Run Exploration"):
         st.session_state.summary = ""
         st.session_state.docs = []
-        
-        keys = {
-            "GOOGLE_API_KEY": os.environ.get("GOOGLE_API_KEY"),
-            "GOOGLE_MAPS_API_KEY": os.environ.get("GOOGLE_MAPS_API_KEY"),
-            "GOOGLE_SEARCH_API_KEY": os.environ.get("GOOGLE_SEARCH_API_KEY"),
-            "GOOGLE_CSE_ID": os.environ.get("GOOGLE_CSE_ID")
-        }
-        
-        with st.spinner("Analyzing neighborhood..."):
+
+        # Cache System 
+        connection = QueryStorage()
+        cahce_result = connection.find_nearby_query(query_text=query, lat=st.session_state.user_lat, lon=st.session_state.user_lon)
+        if cahce_result:
+            st.session_state.summary = cahce_result.get("summary", "Unable to generate summary from cache.")
+            table_data: list[dict[str,Any]] = cahce_result.get("table_data", [])
+            reconstruct_docs = []
+            for record in table_data:
+                reconstruct_docs.append(Document(
+                    page_content="",
+                    metadata={
+                        "poi_name": record.get("poi_name"),
+                        "address": record.get("address"),
+                        "distance_km": record.get("distance_km"),
+                        "latitude": record.get("latitude"),
+                        "longitude": record.get("longitude"),
+                        "wheelchair": record.get("wheelchair")
+                    }
+                ))
+            st.session_state.docs = reconstruct_docs
+            st.success("Loaded results from cache!")
+        else:
+            keys = {
+                "GOOGLE_API_KEY": os.environ.get("GOOGLE_API_KEY"),
+                "GOOGLE_MAPS_API_KEY": os.environ.get("GOOGLE_MAPS_API_KEY"),
+                "GOOGLE_SEARCH_API_KEY": os.environ.get("GOOGLE_SEARCH_API_KEY"),
+                "GOOGLE_CSE_ID": os.environ.get("GOOGLE_CSE_ID")
+            }
+            
             try:    
                 st.session_state.summary, st.session_state.docs = get_rag_response(query, st.session_state.user_lat, st.session_state.user_lon, keys)
-                st.divider()
-                st.subheader("AI Guide Results")
-                st.markdown(st.session_state.summary)
-                st.divider()
-
-                # Map Visualization
-                if st.session_state.docs:
-                    st.subheader("Interactive Map")
-                    m = folium.Map(location=[st.session_state.user_lat, st.session_state.user_lon], zoom_start=15)
-
-                    # Define user location marker
-                    folium.Marker(
-                        [st.session_state.user_lat, st.session_state.user_lon],
-                        popup="Current Position",
-                        icon=folium.Icon(color="blue", icon="user", prefix="fa")
-                    ).add_to(m)
-
-                    for d in st.session_state.docs:
-                        maps_link = get_directions_url(d.metadata['latitude'], d.metadata['longitude'])
-                        popup_html = f"""
-                        <div style="font-family: Arial; width: 200px;">
-                            <b>{d.metadata['poi_name']}</b><br>
-                            Distance: {d.metadata['distance_km']} km<br>
-                            Accessibility: {d.metadata['wheelchair']}<br>
-                            <a href='{maps_link}' target='_blank'>Get Directions</a>
-                        </div>
-                        """
-                        folium.Marker(
-                            [d.metadata['latitude'], d.metadata['longitude']],
-                            popup=folium.Popup(popup_html, max_width=250),
-                            icon=folium.Icon(color="orange", icon="location-dot", prefix="fa")
-                        ).add_to(m)
-                    
-                    # Display the map at the center
-                    st_folium(m,use_container_width= True,height=600,returned_objects=[])
-
+                
+                # Save to cache
+                df_to_cache = parse_markdown_table(st.session_state.summary, st.session_state.docs)
+                connection.save_query_result(query_text=query, lat=st.session_state.user_lat, lon=st.session_state.user_lon, df=df_to_cache, summary=st.session_state.summary)
             except Exception as e:
                 st.error(f"Error: {e}")
+
+        st.divider()
+        st.subheader("AI Guide Results")
+        st.markdown(st.session_state.summary)
+        st.divider()
+
+        # Map Visualization
+        if st.session_state.docs:
+            st.subheader("Interactive Map")
+            m = folium.Map(location=[st.session_state.user_lat, st.session_state.user_lon], zoom_start=15)
+
+            # Define user location marker
+            folium.Marker(
+                [st.session_state.user_lat, st.session_state.user_lon],
+                popup="Current Position",
+                icon=folium.Icon(color="blue", icon="user", prefix="fa")
+            ).add_to(m)
+
+            for d in st.session_state.docs:
+                maps_link = get_directions_url(d.metadata['latitude'], d.metadata['longitude'])
+                popup_html = f"""
+                <div style="font-family: Arial; width: 200px;">
+                    <b>{d.metadata['poi_name']}</b><br>
+                    Distance: {d.metadata['distance_km']} km<br>
+                    Accessibility: {d.metadata['wheelchair']}<br>
+                    <a href='{maps_link}' target='_blank'>Get Directions</a>
+                </div>
+                """
+                folium.Marker(
+                    [d.metadata['latitude'], d.metadata['longitude']],
+                    popup=folium.Popup(popup_html, max_width=250),
+                    icon=folium.Icon(color="orange", icon="location-dot", prefix="fa")
+                ).add_to(m)
+            
+            # Display the map at the center
+            st_folium(m,use_container_width= True,height=600,returned_objects=[])
+
+
 else:
     st.info("Please enter the password in the sidebar.")

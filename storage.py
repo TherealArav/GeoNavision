@@ -37,7 +37,44 @@ class QueryStorage:
             # Indexing the query column makes text lookups instantaneous
             conn.execute("CREATE INDEX IF NOT EXISTS idx_query ON cached_queries(query)")
             conn.commit()
+    
+    def _display_db_size(self):
+        """
+        Docstring for _display_db_size
+        Interal method to display the size of the database file for debugging purposes.
 
+        :param self: Description
+        """
+
+        with self._get_connection() as conn:
+            cursor = conn.execute("PRAGMA page_count;")
+            page_count = cursor.fetchone()[0]
+            cursor = conn.execute("PRAGMA page_size;")
+            page_size = cursor.fetchone()[0]
+            db_size_bytes = page_count * page_size
+            print(f"DEBUG: Database size is {db_size_bytes / (1024 * 1024):.2f} MB")
+        
+    
+    def _display_table(self, cols: list = "*"):
+        """
+        Docstring for _display_table
+        Internal method to display all records in the cached_queries table for debugging purposes.
+
+        :param self: Description
+        """
+
+        with self._get_connection() as conn:
+            if isinstance(cols, list) and cols != "*":
+                cols = ", ".join(cols)
+            else:
+                raise ValueError("cols must be a list of columm names or '*'")
+            
+            df = pd.read_sql_query(f"SELECT {cols} FROM cached_queries", conn)
+            if df.empty:
+                return 'DEBUG: No rerords found'
+            else:
+                return df 
+        
     def find_nearby_query(self, query_text: str, lat: float, lon: float, threshold_meters: int = 100) -> Optional[Dict[str, Any]]:
         """
         Retrieves a cached result if the user is within the threshold distance.
@@ -68,6 +105,7 @@ class QueryStorage:
             return None
 
         # Return the most recent record matching the location
+        print("DEBUG: Valid cached results found", valid_results)
         return sorted(valid_results, key=lambda x: x["timestamp"], reverse=True)[0]
 
     def save_query_result(self, query_text: str, lat: float, lon: float, df: pd.DataFrame, summary: str):
@@ -85,5 +123,7 @@ class QueryStorage:
             conn.commit()
 
 if __name__ == "__main__":
-    storage = QueryStorage("test_cache.db")
+    storage = QueryStorage("spatial_cache.db")
     print("Local SQLite Storage Initialized with indexing.")
+    storage._display_db_size()
+    

@@ -9,4 +9,5 @@ pycache/
 *.csv
 *.pdf
 *.pem
-
+*.db
+*.sql
