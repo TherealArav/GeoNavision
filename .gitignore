@@ -9,4 +9,7 @@ pycache/
 *.csv
 *.pdf
 *.pem
-
+*.log
+*.db
+*.sql
+features.md
