@@ -107,7 +107,6 @@ class QueryStorage:
             return None
 
         # Return the most recent record matching the location
-        print("DEBUG: Valid cached results found", valid_results)
         return sorted(valid_results, key=lambda x: x["timestamp"], reverse=True)[0]
 
     def save_query_result(self, query_text: str, lat: float, lon: float, df: pd.DataFrame, summary: str):

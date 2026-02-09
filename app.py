@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional
 from pydantic import Field, ConfigDict
 from geopy.distance import great_circle
 from dotenv import load_dotenv
-from utilities import store_doc_metadata
+from utilities import store_doc_metadata, check_user_query, check_user_cords
 from storage import QueryStorage
 
 # LangChain Imports
@@ -200,6 +200,24 @@ def apply_custom_css() -> None:
     st.markdown(custom_css, unsafe_allow_html=True)
 
 
+def is_rate_limit() -> bool:
+    """
+    Checks if the user is clicking too fast.
+    Returns True if limited, False if okay to proceed.
+    """
+    COOLDOWN_TIME = 5 # seconds
+    current_time = time.time()
+    last_time = st.session_state.get("last_click_time", 0)
+
+    if current_time - last_time < COOLDOWN_TIME:
+        time_left = int(COOLDOWN_TIME - (current_time - st.session_state.last_click_time))
+        st.warning(f"Please wait {time_left} seconds before clicking again.")
+        return True
+    
+    st.session_state.last_click_time = current_time
+    return False
+
+
 # @st.cache_data(show_spinner=False)
 def get_rag_response(_query, _lat, _lon, _keys):
     """
@@ -244,11 +262,12 @@ apply_custom_css()
 st.title("Local Accessibility Explorer")
 
 # Manage session states
-if "user_lat" not in st.session_state: st.session_state.user_lat = 25.2048
-if "user_lon" not in st.session_state: st.session_state.user_lon = 55.2708
+if "user_lat" not in st.session_state: st.session_state.user_lat = 25.1018
+if "user_lon" not in st.session_state: st.session_state.user_lon = 55.1628
 if "auth" not in st.session_state: st.session_state.auth = False
 if "summary" not in st.session_state: st.session_state.summary = ""
 if "docs" not in st.session_state: st.session_state.docs = []
+if "last_click_time" not in st.session_state: st.session_state.last_click_time = 0
 
 # Manage authentification
 with st.sidebar:
@@ -261,26 +280,24 @@ with st.sidebar:
 if st.session_state.auth:
     st.write("### 1. Set Location")
     
-    # with st.expander("Auto-detect via GPS"):
-    #     # Get user geolocation
-    #     if st.button("Sync GPS Location"):
-    #         location = streamlit_geolocation()
-    #         if location and location.get("latitude") and location.get("longitude"):
-    #             if round(st.session_state.user_lat, 4) != round(location["latitude"], 4) and round(st.session_state.user_lon, 4) != round(location["longitude"], 4):
-    #                 st.session_state.user_lat = location["latitude"]
-    #                 st.session_state.user_lon = location["longitude"]
-    #                 st.success("GPS Location Synced!")
-    #                 st.rerun()
-           
     c1, c2 = st.columns(2)
-    lat_input = c1.number_input("Latitude", value=float(st.session_state.user_lat), format="%.6f")
-    lon_input = c2.number_input("Longitude", value=float(st.session_state.user_lon), format="%.6f")
+    lat_input: float = c1.number_input("Latitude", value = 25.1018, format="%.6f")
+    lon_input: float = c2.number_input("Longitude",  value =  55.1628, format="%.6f")
     
     if lat_input != st.session_state.user_lat or lon_input != st.session_state.user_lon:
         st.session_state.user_lat = lat_input
         st.session_state.user_lon = lon_input
 
-    query = st.text_input("Search Nearby", "Super Markets")
+
+    
+    if not check_user_cords(st.session_state.user_lat, st.session_state.user_lon ):
+        st.error("Invalid coordinates. Latitude must be between -90 and 90, Longitude must be between -180 and 180.")
+        
+
+    query: str = st.text_input("Search Nearby", "Super Markets")
+    if not check_user_query(query):
+            st.error("Invalid query. Please enter a valid search term (alphanumeric and spaces only, max 100 characters)")
+            st.stop()
 
     if st.button("Run Exploration"):
         st.session_state.summary = ""
@@ -308,21 +325,25 @@ if st.session_state.auth:
             st.session_state.docs = reconstruct_docs
             st.success("Loaded results from cache!")
         else:
-            keys = {
-                "GOOGLE_API_KEY": os.environ.get("GOOGLE_API_KEY"),
-                "GOOGLE_MAPS_API_KEY": os.environ.get("GOOGLE_MAPS_API_KEY"),
-                "GOOGLE_SEARCH_API_KEY": os.environ.get("GOOGLE_SEARCH_API_KEY"),
-                "GOOGLE_CSE_ID": os.environ.get("GOOGLE_CSE_ID")
-            }
-            
-            try:    
-                st.session_state.summary, st.session_state.docs = get_rag_response(query, st.session_state.user_lat, st.session_state.user_lon, keys)
+            # If no cache, run the RAG chain and save results
+            # Implementing a simple rate limit to prevent spamming the API while testing
+            if not is_rate_limit():
                 
-                # Save to cache
-                df_to_cache = store_doc_metadata(st.session_state.docs)
-                connection.save_query_result(query_text=query, lat=st.session_state.user_lat, lon=st.session_state.user_lon, df=df_to_cache, summary=st.session_state.summary)
-            except Exception as e:
-                st.error(f"Error: {e}")
+                keys = {
+                    "GOOGLE_API_KEY": os.environ.get("GOOGLE_API_KEY"),
+                    "GOOGLE_MAPS_API_KEY": os.environ.get("GOOGLE_MAPS_API_KEY"),
+                    "GOOGLE_SEARCH_API_KEY": os.environ.get("GOOGLE_SEARCH_API_KEY"),
+                    "GOOGLE_CSE_ID": os.environ.get("GOOGLE_CSE_ID")
+                }
+                
+                try:    
+                    st.session_state.summary, st.session_state.docs = get_rag_response(query, st.session_state.user_lat, st.session_state.user_lon, keys)
+                    
+                    # Save to cache
+                    df_to_cache = store_doc_metadata(st.session_state.docs)
+                    connection.save_query_result(query_text=query, lat=st.session_state.user_lat, lon=st.session_state.user_lon, df=df_to_cache, summary=st.session_state.summary)
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
         st.divider()
         st.subheader("AI Guide Results")
@@ -359,7 +380,6 @@ if st.session_state.auth:
             
             # Display the map at the center
             st_folium(m,use_container_width= True,height=600,returned_objects=[])
-
 
 else:
     st.info("Please enter the password in the sidebar.")

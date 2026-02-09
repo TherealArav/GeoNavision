@@ -34,3 +34,35 @@ def store_doc_metadata(docs: list[Document] = []) -> pd.DataFrame:
     return meta_df
 
 
+def check_user_query(query: str) -> bool:
+    """
+    Validates the user query to ensure it is safe and well-formed.
+    ---
+    Logic:
+    1. Check for empty queries or queries that are too long.
+    2. Ensure the query contains only alphanumeric characters and spaces to prevent SQL injection.
+    3. Return True if the query is valid, False otherwise.
+    """
+    if not query or len(query) > 100 or not query.strip() or query is pd.NA:
+        return False
+    if not all(c.isalnum() or c.isspace() for c in query):
+        return False
+    return True
+
+def check_user_cords(lat: float, lon: float) -> bool:
+    if not isinstance(lat, float) or not isinstance(lon, float):
+        return False
+    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+        return False
+    
+    return True
+
+
+def debug_session_state(lat:float, lon:float, s_lat:float, s_lon:float) -> None:
+        print(f"DEBUG: Upd ated user location to ({lat}, {lon})")
+        print(f"DEBUG: Updated session location to ({s_lat}, {s_lon})")
+        print(f"{"-" * 50}")
+    
+
+
+
