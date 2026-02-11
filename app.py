@@ -304,12 +304,13 @@ if st.session_state.auth:
         if  is_rate_limit():
             st.stop()
         
-        
+
         st.session_state.summary = ""
         st.session_state.docs = []
         st.session_state.cache = {}
 
         # Cache System 
+        
         connection = QueryStorage()
         st.session_state.cache = connection.find_nearby_query(query_text=query, lat=st.session_state.user_lat, lon=st.session_state.user_lon)
         if st.session_state.cache:
