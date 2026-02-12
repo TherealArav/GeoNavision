@@ -1,6 +1,6 @@
 import pandas as pd
-import io
 from typing import Any
+import io
 
 from langchain_core.documents import Document
 

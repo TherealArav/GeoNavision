@@ -270,6 +270,7 @@ if "docs" not in st.session_state: st.session_state.docs = []
 if "last_click_time" not in st.session_state: st.session_state.last_click_time = 0
 if "cache" not in st.session_state: st.session_state.cache = {}
 
+
 # Manage authentification
 with st.sidebar:
     pw = st.text_input("Password", type="password")
@@ -287,6 +288,10 @@ if st.session_state.auth:
     if lat_input != st.session_state.user_lat or lon_input != st.session_state.user_lon:
         st.session_state.user_lat = lat_input
         st.session_state.user_lon = lon_input
+
+        st.session_state.summary = ""
+        st.session_state.docs = []
+        st.session_state.cache = {}
    
     query: str = st.text_input("Search Nearby", "Super Markets")
 
