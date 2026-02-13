@@ -11,3 +11,4 @@ pycache/
 *.pem
 *.db
 *.sql
+temp.py

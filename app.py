@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional
 from pydantic import Field, ConfigDict
 from geopy.distance import great_circle
 from dotenv import load_dotenv
-from utilities import store_doc_metadata, check_user_query, check_user_cords
+from utilities import utilities
 from storage import QueryStorage
 
 # LangChain Imports
@@ -298,11 +298,11 @@ if st.session_state.auth:
     c3,c4 = st.columns(2)
     if c3.button("Run Exploration"): 
 
-        if not check_user_cords(st.session_state.user_lat, st.session_state.user_lon ):
+        if not utilities.check_user_cords(st.session_state.user_lat, st.session_state.user_lon ):
             st.error("Invalid cordinates. Latitude must be between -90 and 90, Longitude must be between -180 and 180.")
             st.stop()
         
-        if not check_user_query(query):
+        if not utilities.check_user_query(query):
             st.error("Invalid query. Please enter a valid search term (alphanumeric and spaces only, max 100 characters)")
             st.stop()
         
@@ -351,7 +351,7 @@ if st.session_state.auth:
                 st.session_state.summary, st.session_state.docs = get_rag_response(query, st.session_state.user_lat, st.session_state.user_lon, keys)
                 
                 # Save to cache
-                df_to_cache = store_doc_metadata(st.session_state.docs)
+                df_to_cache = utilities.store_doc_metadata(st.session_state.docs)
                 connection.save_query_result(query_text=query, lat=st.session_state.user_lat, lon=st.session_state.user_lon, df=df_to_cache, summary=st.session_state.summary)
             except Exception as e:
                 st.error(f"Error: {e}")
