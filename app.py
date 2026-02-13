@@ -80,7 +80,7 @@ class GoogleMapsPOIRetriever(BaseRetriever):
                 return []
                 
             res = response.json()
-            places = res.get("places", [])
+            places: dict[str,Any] = res.get("places", [])
             
             # Debugging: Show count in the console/logs
             return places
@@ -115,22 +115,22 @@ class GoogleMapsPOIRetriever(BaseRetriever):
         """
         Process results into LangChain documents
         """
-        self.map_latency = 0.0
-        self.search_latencies = []
+        self.map_latency: float = 0.0
+        self.search_latencies: list[float] = []
         
-        places = self._get_pois_from_places_new(query)
-        docs = []
-        user_loc = (self.user_latitude, self.user_longitude)
+        places: dict[str,Any] = self._get_pois_from_places_new(query)
+        docs: list[Document] = []
+        user_loc: tuple[float,float] = (self.user_latitude, self.user_longitude)
 
         for poi in places: 
-            name = poi.get("displayName", {}).get("text", "Unknown Place")
-            address = poi.get("formattedAddress", "No address available")
-            loc = poi.get("location", {})
+            name: str = poi.get("displayName", {}).get("text", "Unknown Place")
+            address: str = poi.get("formattedAddress", "No address available")
+            loc: str = poi.get("location", {})
             p_lat, p_lng = loc.get("latitude"), loc.get("longitude")
             
-            acc = poi.get("accessibilityOptions", {})
-            wheelchair_entrance = acc.get("wheelchairAccessibleEntrance", "Unknown")
-            wheelchair_restroom = acc.get("wheelchairAccessibleRestroom", "Unknown")
+            acc:dict[dict[str,Any]] = poi.get("accessibilityOptions", {})
+            wheelchair_entrance: bool = acc.get("wheelchairAccessibleEntrance", "Unknown")
+            wheelchair_restroom: bool = acc.get("wheelchairAccessibleRestroom", "Unknown")
             
             if p_lat and p_lng:
                 dist = f"{great_circle(user_loc, (p_lat, p_lng)).km:.2f}"
@@ -139,6 +139,7 @@ class GoogleMapsPOIRetriever(BaseRetriever):
                 # Combine search snippet with accessibility facts for the LLM
                 content = f"Name: {name}. Distance: {dist}km. {snippet} Accessibility Info - Entrance: {wheelchair_entrance}, Restroom: {wheelchair_restroom}."
                 
+                # Compile Contents and Metadata into the Document
                 docs.append(Document(
                     page_content=content,
                     metadata={
@@ -153,7 +154,7 @@ class GoogleMapsPOIRetriever(BaseRetriever):
         return docs
 
 # Utility Functions
-def get_directions_url(dest_lat, dest_lon):
+def get_directions_url(dest_lat: float, dest_lon: float) -> str:
     """
     Generate Google Maps directions link
     """
@@ -190,11 +191,44 @@ def apply_custom_css() -> None:
             border: none;
             transition: all 0.3s ease;
         }
-        .stButton>button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(255, 75, 75, 0.3);
+
+        /* 1. The Main Table Container */
+        div[data-testid="stMarkdownContainer"] table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            font-size: 0.9em;
+            font-family: sans-serif;
+            border-radius: 8px 8px 0 0; /* Rounded top corners */
+            overflow: hidden; /* Ensures headers respect the radius */
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.05); /* Subtle depth */
         }
 
+        /* 2. The Header Row */
+        div[data-testid="stMarkdownContainer"] thead tr {
+            background-color: #FF4B4B; /* Your Primary Brand Color */
+            color: #ffffff;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        /* 3. Cells and Padding */
+        div[data-testid="stMarkdownContainer"] th,
+        div[data-testid="stMarkdownContainer"] td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #dddddd;
+        }
+
+        /* 4. Active/Bottom Border */
+        div[data-testid="stMarkdownContainer"] tbody tr:last-of-type {
+            border-bottom: 2px solid #FF4B4B;
+        }
+        
+        /* Optional: Force the Distance column (usually 2nd) to be centered */
+        div[data-testid="stMarkdownContainer"] th:nth-child(2),
+        div[data-testid="stMarkdownContainer"] td:nth-child(2) {
+        text-align: center;
+        }           
         </style>
     """
     st.markdown(custom_css, unsafe_allow_html=True)
@@ -205,9 +239,9 @@ def is_rate_limit() -> bool:
     Checks if the user is clicking too fast.
     Returns True if limited, False if okay to proceed.
     """
-    COOLDOWN_TIME = 5 # seconds
+    COOLDOWN_TIME: int = 5 # seconds
     current_time = time.time()
-    last_time = st.session_state.get("last_click_time", 0)
+    last_time: time = st.session_state.get("last_click_time")
 
     if current_time - last_time < COOLDOWN_TIME:
         time_left = int(COOLDOWN_TIME - (current_time - st.session_state.last_click_time))
@@ -260,6 +294,7 @@ def get_rag_response(_query, _lat, _lon, _keys):
 st.set_page_config(page_title="Accessibility Guide", layout="wide")
 apply_custom_css()
 st.title("Local Accessibility Explorer")
+
 
 # Manage session states
 if "user_lat" not in st.session_state: st.session_state.user_lat = 25.1018
@@ -314,14 +349,13 @@ if st.session_state.auth:
         st.session_state.docs = []
         st.session_state.cache = {}
 
-        # Cache System 
-        
+        # Cache System -- Connect to local storage and check for nearby cached results before running system.
         connection = QueryStorage()
         st.session_state.cache = connection.find_nearby_query(query_text=query, lat=st.session_state.user_lat, lon=st.session_state.user_lon)
         if st.session_state.cache:
             st.session_state.summary = st.session_state.cache.get("summary", "Unable to generate summary from cache.")
             table_data: list[dict[str,Any]] = st.session_state.cache.get("table_data", [])
-            reconstruct_docs = []
+            reconstruct_docs: list[Document] = []
             for record in table_data:
                 reconstruct_docs.append(Document(
                     page_content="",
@@ -340,7 +374,7 @@ if st.session_state.auth:
         # If no cache, run the RAG chain and save results
         # Implementing a simple rate limit to prevent spamming the API while testing
 
-            keys = {
+            keys: dict[str,str] = {
                 "GOOGLE_API_KEY": os.environ.get("GOOGLE_API_KEY"),
                 "GOOGLE_MAPS_API_KEY": os.environ.get("GOOGLE_MAPS_API_KEY"),
                 "GOOGLE_SEARCH_API_KEY": os.environ.get("GOOGLE_SEARCH_API_KEY"),
@@ -385,7 +419,7 @@ if st.session_state.auth:
 
         for d in st.session_state.docs:
             maps_link = get_directions_url(d.metadata['latitude'], d.metadata['longitude'])
-            popup_html = f"""
+            popup_html: str = f"""
             <div style="font-family: Arial; width: 200px;">
                 <b>{d.metadata['poi_name']}</b><br>
                 Distance: {d.metadata['distance_km']} km<br>
