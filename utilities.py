@@ -24,12 +24,11 @@ class utilities:
         for doc in docs:
             
             try:
-                meta: dict = doc.metadata
+                meta: dict = doc.metadata.copy() # Use copy to avoid modifying original metadata
                 # Only include metadata if it has valid latitude and longitude values
                 if "latitude" not in meta or "longitude" not in meta:
                     meta["latitude"] = 0.0
                     meta["longitude"] = 0.0
-                    print(f"DEBUG: Document metadata missing lat/lon, defaulting to 0.0: {meta}\n")
                 meta_data.append(meta)
             except Exception as e:
                 print(f"Error extracting metadata from document: {e}")
@@ -64,11 +63,52 @@ class utilities:
         
         return True
 
+    @staticmethod
+    def create_df_table(docs: list[Document] = []) -> pd.DataFrame:
+        """
+        Docstring for create_df_table
+        
+        :param docs: Document object containing the table data in the metadata
+        :type docs: list[Document]
+        :return: DataFrame created from the table data in the document's metadata
+        :rtype: DataFrame
+        """
+       # Extract documents for data if available
+        meta_data = []
+        for doc in docs:
+            try:
+                # Rearnge metadata for better presentation in the UI, and to ensure only relevant information is displayed.
+                meta: dict = doc.metadata.copy() # Use copy to avoid modifying original metadata
+                
+                meta.pop("latitude",0.0)
+                meta.pop("longitude",0.0)
 
-    def debug_session_state(lat:float, lon:float, s_lat:float, s_lon:float) -> None:
-            print(f"DEBUG: Upd ated user location to ({lat}, {lon})")
-            print(f"DEBUG: Updated session location to ({s_lat}, {s_lon})")
-            print(f"{"-" * 50}")
+                poi: str = meta.pop("poi_name","Unknown POI")
+                addr: str = meta.pop("address","Unknown Address")
+                meta["Point of Interest"] = f"{poi} - {addr}"
+                
+                wheelchair_acc: tuple = meta.pop("wheelchair", ("Unknown", "Unknown"))
+                if isinstance(wheelchair_acc, (tuple,list)) and len(wheelchair_acc) == 2:
+                    wheelchair_entrance, wheelchair_restroom = wheelchair_acc
+                else:
+                    wheelchair_entrance, wheelchair_restroom = ("Unknown", "Unknown")
+                meta["Wheelchair Accessibility"] = f"Entrance: {wheelchair_entrance}, Restroom: {wheelchair_restroom}"
+
+                distance: float = float(meta.pop("distance_km", "Unknown"))
+                meta["Distance (km)"] = {distance}
+
+                meta_data.append(meta)
+                
+            except Exception as e:
+                print(f"Error extracting metadata from document: {e}")
+                meta_data.append({
+                    "Point of Interest": "Error processing record",
+                    "Wheelchair Accessibility": "Unknown",
+                    "Distance (km)": "Unknown"
+                })
+                
+        return pd.DataFrame(meta_data) if meta_data else pd.DataFrame()
+
     
 
 

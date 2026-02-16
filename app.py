@@ -149,7 +149,7 @@ class GoogleMapsPOIRetriever(BaseRetriever):
                         "distance_km": dist,
                         "latitude": p_lat,
                         "longitude": p_lng,
-                        "wheelchair": wheelchair_entrance
+                        "wheelchair": (wheelchair_entrance,wheelchair_restroom)
                     }
                 ))
         return docs
@@ -270,15 +270,34 @@ def get_rag_response(_query, _lat, _lon, _keys):
         google_api_key=_keys["GOOGLE_API_KEY"]
     )
     
-    template = """You are a helpful accessibility consultant. 
-    Summarize these places based on the context provided. 
-    If a place is listed, identify it clearly. *If no relevant info exists, say no.*
-    Generate the summary in a tabular format with columns: Place Name, Distance (km), Accessibility Features, Additional Information.
+    audio_prompt_template = """
+ROLE:
+You are an expert Audio Description Specialist and Accessibility Consultant. Your goal is to convert technical point-of-interest data into a warm, helpful, and natural-sounding audio briefing for a user with visual or mobility impairments.
+
+TASK:
+Write a spoken-word script (under 150 words) summarizing the accessibility of the nearby area based on the provided data.
+
+CONSTRAINTS FOR TTS CLARITY:
+1. NO MARKDOWN: Do not use asterisks, bolding, bullet points, or tables.
+2. PHONETIC FRIENDLY: Avoid complex abbreviations. Write "kilometers" instead of "km".
+3. NATURAL FLOW: Use transitional phrases like "If you're looking for," "Alternatively," and "Just a short distance away."
+4. HIERARCHY: Mention the closest highly accessible location first.
+5. NO SYMBOLS: Do not use symbols like "|" or "/". Use words like "and" or "or".
+
+CONTENT FOCUS:
+- Confirm wheelchair entrance accessibility clearly.
+- Mention restroom availability if known.
+- Provide a brief "vibe" or context if the web snippet includes it.
+
+USER QUERY: {question}
+
+CONTEXT DATA:
+{context}
+
+AUDIO SCRIPT:
+"""
     
-    Context: {context}
-    User Query: {question}"""
-    
-    prompt = PromptTemplate.from_template(template)
+    prompt = PromptTemplate.from_template(audio_prompt_template)
     docs = retriever.invoke(_query)
     
     if not docs:
@@ -290,6 +309,11 @@ def get_rag_response(_query, _lat, _lon, _keys):
     summary = chain.invoke({"context": formatted_context, "question": _query})
     
     return summary, docs
+
+@st.cache_resource
+def initialize_tts() -> KokoroTTS:
+    """Cache the TTS model to avoid reinitialization on every audio play."""
+    return KokoroTTS()
 
 # UI IMPLEMENTATION 
 st.set_page_config(page_title="Accessibility Guide", layout="wide")
@@ -403,13 +427,14 @@ if st.session_state.auth:
         st.info("No cache found for this query and location.")  
     
     if c5.button("Play Audio Summary") and st.session_state.summary:
-        tts = KokoroTTS()
+        tts: KokoroTTS = initialize_tts()
         audio_bytes = tts.generate_audio(st.session_state.summary)
         st.audio(audio_bytes, format="audio/wav")
         
 
     with st.container(border=True):
         st.subheader("AI Guide Results")
+        st.dataframe(utilities.create_df_table(st.session_state.docs), hide_index=True)
         st.markdown(st.session_state.summary)
 
     # Map Visualization
@@ -441,7 +466,7 @@ if st.session_state.auth:
             ).add_to(m)
         
         # Display the map at the center
-        st_folium(m,use_container_width= True,height=600,returned_objects=[])
+        st_folium(m,width= True,height=600,returned_objects=[])
 
 else:
     st.info("Please enter the password in the sidebar.")
