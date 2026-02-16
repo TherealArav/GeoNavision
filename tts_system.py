@@ -82,9 +82,9 @@ class KokoroTTS:
         text = " ".join(text.split())
         text = re.sub(r'[^\w\s.,!?;:\'\-\"()$]', '', text)
 
-        if len(text) > 500:
+        if len(text.split()) > 250:
             print("Warning: Text exceeds 500 characters. Truncating to fit model limits.")
-            text = text[:500]
+            text = " ".join(text.split()[:250])
         
         end_space = text.rfind(' ')
         if end_space > 0:
@@ -121,8 +121,16 @@ class KokoroTTS:
 
 
 if __name__ == "__main__":
+    # Test the KokoroTTS class by generating audio from a sample text
+    
     sample = KokoroTTS()
-    audio = sample.generate_audio("Hello, this is a sample text to speech, how can i help you.")
+    sample_text = """
+    Here is your accessibility guide for nearby supermarkets. I found nine locations in your vicinity.
+    For confirmed accessibility, Waitrose in Downtown Dubai, Spinneys in DIFC, and both Carrefour Markets at Marina Crown and Silverene Towers offer fully accessible entrances and restrooms. The West Zone Fresh Hypermarket near the metro station in Al Barsha also provides full accessibility.
+    Several other locations, including Aswaaq in Al Sofouh, Al Maya, and VIVA Supermarket, have confirmed accessible entrances, but their restroom accessibility is currently unknown. Please note that the 'Gate 1 to 20' location in Al Barsha has an accessible entrance but does not have an accessible restroom.
+    The closest option with full verified accessibility is Waitrose, which is 1.2 kilometers away."
+"""
+    audio = sample.generate_audio(sample_text)
     if audio is not None:
         with open("sample_output.wav", "wb") as f:
             f.write(audio.read())
