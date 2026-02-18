@@ -154,13 +154,8 @@ class GoogleMapsPOIRetriever(BaseRetriever):
                 ))
         return docs
 
-# Utility Functions
-def get_directions_url(dest_lat: float, dest_lon: float) -> str:
-    """
-    Generate Google Maps directions link
-    """
-    return f"https://www.google.com/maps/dir/?api=1&destination={dest_lat},{dest_lon}"
 
+# Utility Functions
 def apply_custom_css() -> None:
     """
     Apply custom CSS styles to app
@@ -487,38 +482,6 @@ if st.session_state.auth:
             tts: KokoroTTS = initialize_tts()
             audio_bytes = tts.generate_audio(st.session_state.summary)
             st.audio(audio_bytes, format="audio/wav")
-
-    # Map Visualization
-    if st.session_state.docs:
-        st.subheader("Interactive Map")
-        st.space("small")
-        m = folium.Map(location=[st.session_state.user_lat, st.session_state.user_lon], zoom_start=15)
-
-        # Define user location marker
-        folium.Marker(
-            [st.session_state.user_lat, st.session_state.user_lon],
-            popup="Current Position",
-            icon=folium.Icon(color="blue", icon="user", prefix="fa")
-        ).add_to(m)
-
-        for d in st.session_state.docs:
-            maps_link = get_directions_url(d.metadata['latitude'], d.metadata['longitude'])
-            popup_html: str = f"""
-            <div style="font-family: Arial; width: 200px;">
-                <b>{d.metadata['poi_name']}</b><br>
-                Distance: {d.metadata['distance_km']} km<br>
-                Accessibility: {d.metadata['wheelchair']}<br>
-                <a href='{maps_link}' target='_blank'>Get Directions</a>
-            </div>
-            """
-            folium.Marker(
-                [d.metadata['latitude'], d.metadata['longitude']],
-                popup=folium.Popup(popup_html, max_width=250),
-                icon=folium.Icon(color="orange", icon="location-dot", prefix="fa")
-            ).add_to(m)
-        
-        # Display the map at the center
-        st_folium(m,width= True,height=600,returned_objects=[])
 
 else:
     st.info("Please enter the password in the sidebar.")
