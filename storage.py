@@ -76,7 +76,8 @@ class QueryStorage:
             if df.empty:
                 return 'DEBUG: No rerords found'
             else:
-                return df 
+                print(df)
+                return df
         
     def find_nearby_query(self, query_text: str, lat: float, lon: float, threshold_meters: int = 100) -> Optional[Dict[str, Any]]:
         """
@@ -145,5 +146,6 @@ class QueryStorage:
 if __name__ == "__main__":
     storage = QueryStorage("spatial_cache.db")
     print("Local SQLite Storage Initialized with indexing.")
+    storage._display_table(['id','query'])
 
     

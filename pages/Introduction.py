@@ -64,6 +64,16 @@ st.markdown("The app presents the information in a tabular manner, consisting of
 st.markdown("The information retrieved, is displayed on an interactive map, which the user can access. The map highlights the POis, which the user can click for further information. An embedded link is created to take the user onto Google Maps, if they wish for directions to the place.")
 st.markdown("In conclusion, we aim towards creating system, which enable users with visual disabilities to navigate the world. New technologies like smart glasses are opening the gates for building smarter and more accommodable navigation systems  for users. Lets all come together, to build an accessible world for everyone.  ")
 st.video("https://youtu.be/dz-I23rogpE")
+st.header("Query Example")
+st.markdown("Here are a list of queries, which you can try out on the app with the default location.")
+st.markdown("- `super markets`")
+st.markdown("- `caffe`")
+st.markdown("- `hotels`")
+st.markdown("- `malls`")
+st.markdown("- `restaurant`")
+st.markdown("- `theme parks`")
+st.markdown("*Note that the results are retrived from the cache, For live results, please set up the API keys and run the app locally.*")
+
 
 
 
