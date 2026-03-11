@@ -115,8 +115,8 @@ class QueryStorage:
         """
         Saves result to local storage, serializing the DataFrame to JSON.
         """
-        table_json = json.dumps(df.to_dict('records'))
-        timestamp = datetime.now().isoformat()
+        table_json: json = json.dumps(df.to_dict('records'))
+        timestamp: datetime = datetime.now().isoformat()
         
         with self._get_connection() as conn:
             conn.execute("""
