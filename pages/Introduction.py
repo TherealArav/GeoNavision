@@ -66,7 +66,7 @@ st.markdown("In conclusion, we aim towards creating system, which enable users w
 st.video("https://youtu.be/dz-I23rogpE")
 st.header("Query Example")
 st.markdown("Here are a list of queries, which you can try out on the app with the default location.")
-st.markdown("Password: `TechClub2026`")
+# st.markdown("Password: `TechClub2026`") Use if want to run the app with authentication
 st.markdown("- `super markets`")
 st.markdown("- `caffe`")
 st.markdown("- `hotels`")

@@ -309,7 +309,7 @@ st.title("Local Accessibility Explorer")
 # Manage session states
 if "user_lat" not in st.session_state: st.session_state.user_lat = 25.1018
 if "user_lon" not in st.session_state: st.session_state.user_lon = 55.1628
-if "auth" not in st.session_state: st.session_state.auth = False
+if "auth" not in st.session_state: st.session_state.auth = True
 if "summary" not in st.session_state: st.session_state.summary = ""
 if "docs" not in st.session_state: st.session_state.docs = []
 if "last_click_time" not in st.session_state: st.session_state.last_click_time = 0
@@ -317,11 +317,11 @@ if "cache" not in st.session_state: st.session_state.cache = {}
 
 
 # Manage authentification
-with st.sidebar:
-    pw = st.text_input("Password", type="password")
-    if pw == os.environ.get("HACKATHON_PASSWORD"):
-        st.success("Authenticated")
-        st.session_state.auth = True
+# with st.sidebar:
+#     pw = st.text_input("Password", type="password")
+#     if pw == os.environ.get("HACKATHON_PASSWORD"):
+#         st.success("Authenticated")
+#         st.session_state.auth = True
 
 # Main Application
 if st.session_state.auth:
