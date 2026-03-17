@@ -13,3 +13,17 @@ pycache/
 temp.py
 *.onnx
 *.bin
+*.jpg
+*.png
+*.jpeg
+*.gif
+*.mp4
+*.avi
+*.mkv
+*.log
+*.bak
+*.tmp
+*.zip
+
+# Model files
+yolo26n.pt

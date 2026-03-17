@@ -131,5 +131,6 @@ streamlit run app.py
 - [Kokoro-TTS](https://github.com/thewh1teagle/kokoro-onnx.git)
 - [Folium](https://github.com/python-visualization/folium.git)
 - [Streamlit-Folium](https://github.com/randyzwitch/streamlit-folium.git)
+- [Google-Vertex-Ai](https://cloud.google.com/vertex-ai)
 ---
 
