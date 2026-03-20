@@ -56,25 +56,37 @@ class QueryStorage:
             print(f"DEBUG: Database size is {db_size_bytes / (1024 * 1024):.2f} MB")
         
     
-    def _display_table(self, cols: list = "*"):
+    def _display_table(self, cols="*"):
         """
-        Docstring for _display_table
-        Internal method to display all records in the cached_queries table for debugging purposes.
+        Internal method to display records in the cached_queries table.
+        Secured against SQL injection via strict column allowlisting.
 
-        :param self: Description
-        
-        !! DO NOT USE IN PRODUCTION !!
+        :param cols: List of column names to retrieve, or '*' for all columns.
         """
+        # 1. Define the absolute source of truth for allowed columns
+        VALID_COLUMNS = {"id", "query", "lat", "lon", "summary", "table_data", "timestamp"}
 
         with self._get_connection() as conn:
-            if isinstance(cols, list) and cols != "*":
-                cols = ", ".join(cols)
+            if cols == "*":
+                safe_cols = "*"
+            elif isinstance(cols, list):
+                # 2. Check for any injected or invalid columns
+                invalid_cols = [col for col in cols if col not in VALID_COLUMNS]
+                if invalid_cols:
+                    # Immediately reject the request if an unknown column is passed
+                    raise ValueError(f"Invalid or unauthorized column names provided: {invalid_cols}")
+                
+                # 3. Safe to join because we've proven the contents are strictly from our list
+                safe_cols = ", ".join(cols)
             else:
-                raise ValueError("cols must be a list of columm names or '*'")
-            # !! SQL INJECTION RISK !! This is for debugging only and should never be used in production without proper sanitization
-            df = pd.read_sql_query(f"SELECT {cols} FROM cached_queries", conn)
+                raise ValueError("cols must be a list of column names or '*'")
+            
+            # The f-string is now 100% safe because 'safe_cols' is completely controlled
+            df = pd.read_sql_query(f"SELECT {safe_cols} FROM cached_queries", conn)
+            
             if df.empty:
-                return 'DEBUG: No rerords found'
+                print('DEBUG: No records found')
+                return 'DEBUG: No records found'
             else:
                 print(df)
                 return df
@@ -115,8 +127,8 @@ class QueryStorage:
         """
         Saves result to local storage, serializing the DataFrame to JSON.
         """
-        table_json: json = json.dumps(df.to_dict('records'))
-        timestamp: datetime = datetime.now().isoformat()
+        table_json = json.dumps(df.to_dict('records'))
+        timestamp = datetime.now().isoformat()
         
         with self._get_connection() as conn:
             conn.execute("""
