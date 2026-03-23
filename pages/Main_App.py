@@ -3,7 +3,7 @@ import streamlit as st
 import requests
 import time
 import pandas as pd
-from typing import List, Dict, Any
+from typing import Any, TypedDict, List, Dict
 from pydantic import ConfigDict
 from geopy.distance import great_circle
 from dotenv import load_dotenv
@@ -30,7 +30,7 @@ class GoogleMapsPOIRetriever(BaseRetriever):
     radius: int = 1500
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def _get_pois_from_places_new(self, query: str) -> List[Dict[str, Any]]:
+    def _get_pois_from_places_new(self, query: str) -> list[Dict[str, Any]]:
         """
         Uses searchText to find POIs.
         """
@@ -94,7 +94,7 @@ class GoogleMapsPOIRetriever(BaseRetriever):
         except Exception as e:
             return f"Web search error: {str(e)}"
 
-    def _get_relevant_documents(self, query: str) -> List[Document]:
+    def _get_relevant_documents(self, query: str) -> list[Document]:
         """
         Process results into LangChain documents
         """
@@ -236,7 +236,7 @@ def clear_results() -> None:
     st.session_state.docs = []
     st.session_state.cache = {}
 
-def get_rag_response(_query, _lat, _lon, _keys):
+def get_rag_response(_query: str, _lat: str, _lon: str, _keys: dict[str,str]) -> tuple[str, list[Document]]:
     """
     Execute RAG chain and cache results
     """
