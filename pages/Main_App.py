@@ -137,7 +137,6 @@ class GoogleMapsPOIRetriever(BaseRetriever):
 
 
 # Utility Functions
-@st.cache_resource
 def apply_custom_css() -> None:
     """
     Apply custom CSS styles to app
@@ -173,6 +172,7 @@ def apply_custom_css() -> None:
     """
     st.markdown(custom_css, unsafe_allow_html=True)
 
+
 def apply_df_styles(df: pd.DataFrame) -> pd.DataFrame:
     """
     Applies conditional formatting and structural styling to the POI DataFrame.
@@ -193,7 +193,7 @@ def apply_df_styles(df: pd.DataFrame) -> pd.DataFrame:
         # Dictionary mapping for quick style lookups
         styles = {
             "Unknown":'color: #FFFF00;', # Yellow
-            "Yes":    'color: ##CCFF00;', # Green
+            "Yes":    'color: #CCFF00;', # Green
             "True":    'color: #66FF00 ;', # Green
             "No":      'color: #FF0000;', # Red
             "False":   'color: #FF0000;'  # Red

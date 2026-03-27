@@ -12,7 +12,13 @@ if "docs" not in st.session_state:
     st.session_state.docs = []
 
 
-st.markdown("""
+def apply_page_style() -> None:
+
+    """
+    Apply Custom CSS to the Maps Page for better layout and map display.
+    """
+    
+    st.markdown("""
     <style>
         /* 1. Remove standard Streamlit padding */
         .block-container {
@@ -32,8 +38,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+
 # Map Visualization
 if st.session_state.docs:
+
+    apply_page_style()
     m = folium.Map(location=[st.session_state.user_lat, st.session_state.user_lon], zoom_start=15)
 
     # Define user location marker
@@ -61,3 +70,5 @@ if st.session_state.docs:
     
     # Display the map at the center
     st_folium(m,width= "100%",height=1000,returned_objects=[])
+else:
+    st.info("No nearby points of interest found. Please try a different location or query.")
