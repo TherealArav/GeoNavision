@@ -14,7 +14,7 @@ class SceneAnalysis(BaseModel):
     dynamic_obstacles: list[str]
     navigational_signage: list[str]
 
-# Initialize the AI Studio client (automatically picks up GEMINI_API_KEY)
+# - the AI Studio client (automatically picks up GEMINI_API_KEY)
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def analyze_street_scene(image_path: str):

@@ -15,10 +15,10 @@ class QueryStorage:
         self.db_path = db_path
         self._create_table()
 
-    def _get_connection(self):
+    def _get_connection(self) -> sqlite3.Connection:
         return sqlite3.connect(self.db_path)
 
-    def _create_table(self):
+    def _create_table(self) -> None:
         """
         Creates the cache table and indices for performance.
         """
@@ -39,7 +39,7 @@ class QueryStorage:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_query ON cached_queries(query)")
             conn.commit()
     
-    def _display_db_size(self):
+    def _display_db_size(self) -> None:
         """
         Docstring for _display_db_size
         Interal method to display the size of the database file for debugging purposes.
@@ -56,7 +56,7 @@ class QueryStorage:
             print(f"DEBUG: Database size is {db_size_bytes / (1024 * 1024):.2f} MB")
         
     
-    def _display_table(self, cols="*"):
+    def _display_table(self, cols="*") -> None:
         """
         Internal method to display records in the cached_queries table.
         Secured against SQL injection via strict column allowlisting.
