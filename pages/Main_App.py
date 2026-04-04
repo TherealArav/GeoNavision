@@ -383,7 +383,10 @@ if st.session_state.auth:
                 "GOOGLE_CSE_ID": os.environ.get("GOOGLE_CSE_ID")
             }
             
-            try:    
+            try:
+                if not all(keys.values()):
+                    raise Exception("One or more API keys are missing. Please check your environment variables.")
+                    
                 st.session_state.summary, st.session_state.docs = get_rag_response(query, st.session_state.user_lat, st.session_state.user_lon, keys)
                 
                 # Save to cache

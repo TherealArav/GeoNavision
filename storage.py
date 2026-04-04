@@ -1,10 +1,15 @@
+
+from __future__ import annotations
+
+
 from geopy.distance import great_circle
-from typing import Optional, Dict, Any
+from typing import TYPE_CHECKING, Optional, Dict, Any
 from datetime import datetime
-import pandas as pd
 import sqlite3
 import json
 
+if TYPE_CHECKING:
+    import pandas as pd
 
 class QueryStorage:
     def __init__(self, db_path: str = "spatial_cache.db"):
@@ -39,58 +44,7 @@ class QueryStorage:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_query ON cached_queries(query)")
             conn.commit()
     
-    def _display_db_size(self) -> None:
-        """
-        Docstring for _display_db_size
-        Interal method to display the size of the database file for debugging purposes.
 
-        :param self: Description
-        """
-
-        with self._get_connection() as conn:
-            cursor = conn.execute("PRAGMA page_count;")
-            page_count = cursor.fetchone()[0]
-            cursor = conn.execute("PRAGMA page_size;")
-            page_size = cursor.fetchone()[0]
-            db_size_bytes = page_count * page_size
-            print(f"DEBUG: Database size is {db_size_bytes / (1024 * 1024):.2f} MB")
-        
-    
-    def _display_table(self, cols="*") -> None:
-        """
-        Internal method to display records in the cached_queries table.
-        Secured against SQL injection via strict column allowlisting.
-
-        :param cols: List of column names to retrieve, or '*' for all columns.
-        """
-        # 1. Define the absolute source of truth for allowed columns
-        VALID_COLUMNS = {"id", "query", "lat", "lon", "summary", "table_data", "timestamp"}
-
-        with self._get_connection() as conn:
-            if cols == "*":
-                safe_cols = "*"
-            elif isinstance(cols, list):
-                # 2. Check for any injected or invalid columns
-                invalid_cols = [col for col in cols if col not in VALID_COLUMNS]
-                if invalid_cols:
-                    # Immediately reject the request if an unknown column is passed
-                    raise ValueError(f"Invalid or unauthorized column names provided: {invalid_cols}")
-                
-                # 3. Safe to join because we've proven the contents are strictly from our list
-                safe_cols = ", ".join(cols)
-            else:
-                raise ValueError("cols must be a list of column names or '*'")
-            
-            # The f-string is now 100% safe because 'safe_cols' is completely controlled
-            df = pd.read_sql_query(f"SELECT {safe_cols} FROM cached_queries", conn)
-            
-            if df.empty:
-                print('DEBUG: No records found')
-                return 'DEBUG: No records found'
-            else:
-                print(df)
-                return df
-        
     def find_nearby_query(self, query_text: str, lat: float, lon: float, threshold_meters: int = 100) -> Optional[Dict[str, Any]]:
         """
         Retrieves a cached result if the user is within the threshold distance.
@@ -155,9 +109,5 @@ class QueryStorage:
             ,(query_text,lat,lon))
             conn.commit()
 
-if __name__ == "__main__":
-    storage = QueryStorage("spatial_cache.db")
-    print("Local SQLite Storage Initialized with indexing.")
-    storage._display_table(['id','query'])
 
     

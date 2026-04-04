@@ -1,3 +1,6 @@
+
+from __future__ import annotations
+
 import pandas as pd
 from typing import Any
 import io
@@ -18,6 +21,7 @@ class utilities:
         1. Parse metadata, from LangChain Document for app functionality and caching.
         5. Store data in a DataFrame for easy manipulation and retrieval. 
         """
+
 
         # Extract documents for data if available
         meta_data = []
@@ -107,8 +111,4 @@ class utilities:
                 })
                 
         return pd.DataFrame(meta_data) if meta_data else pd.DataFrame()
-
     
-
-
-
