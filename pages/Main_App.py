@@ -402,8 +402,9 @@ if st.session_state.auth:
     if c4.button("Clear Cache") and st.session_state.cache:
         connection = initialize_storage()
         connection._delete_query_result(query_text=st.session_state.cache.get("query"), lat=st.session_state.cache.get("lat"), lon=st.session_state.cache.get("lon"))
-        st.session_state.cache = {}
+        clear_results()
         st.success("Cache cleared for this query and location.")
+        
     elif st.session_state.cache:
         st.info("Cache exists for this query and location. Click 'Clear Cache' to remove it.")
     else:
