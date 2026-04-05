@@ -1,3 +1,5 @@
+"""Main application file for the Context-Aware Navigation RAG system. This file sets up the Streamlit application, defines the different pages (Introduction, Main Application, Interactive Maps), and manages navigation between these pages. It serves as the entry point for the application, allowing users to explore the various features and functionalities provided by the system."""
+
 import streamlit as st
 
 

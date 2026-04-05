@@ -1,3 +1,5 @@
+""""Introduction page for the GeoNavision application. This page provides an overview of the application, its purpose, and how it works. It includes a welcome message, a description of the application's features, and example queries that users can try out. The page also includes a video demonstration of the application in action."""
+
 import streamlit as st
 
 

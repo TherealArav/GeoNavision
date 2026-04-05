@@ -1,6 +1,9 @@
+"""Interactive Maps page for the GeoNavision application. This page displays an interactive map with markers for nearby points of interest based on the user's location and search query. Each marker includes a popup with information about the location, such as its name, distance from the user, accessibility information, and a link to get directions using Google Maps. The map is generated using the Folium library and displayed in Streamlit using the streamlit-folium component. This page provides a visual representation of the search results, making it easier for users to explore their surroundings and find accessible locations."""
+
 import streamlit as st
-import folium
 from streamlit_folium import st_folium
+
+import folium
 
 def get_directions_url(dest_lat: float, dest_lon: float) -> str:
     """
@@ -53,8 +56,9 @@ if st.session_state.docs:
     ).add_to(m)
 
     for d in st.session_state.docs:
-        maps_link = get_directions_url(d.metadata['latitude'], d.metadata['longitude'])
-        popup_html: str = f"""
+
+        maps_link: str = get_directions_url(d.metadata['latitude'], d.metadata['longitude'])
+        popup_html = f"""
         <div style="font-family: Arial; width: 200px;">
             <b>{d.metadata['poi_name']}</b><br>
             Distance: {d.metadata['distance_km']} km<br>
@@ -62,6 +66,7 @@ if st.session_state.docs:
             <a href='{maps_link}' target='_blank'>Get Directions</a>
         </div>
         """
+        
         folium.Marker(
             [d.metadata['latitude'], d.metadata['longitude']],
             popup=folium.Popup(popup_html, max_width=250),
@@ -70,5 +75,7 @@ if st.session_state.docs:
     
     # Display the map at the center
     st_folium(m,width= "100%",height=1000,returned_objects=[])
+
 else:
+    
     st.info("No nearby points of interest found. Please try a different location or query.")

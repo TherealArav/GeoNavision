@@ -1,7 +1,10 @@
-import os
+"""Main application interface for the Context-Aware Navigation RAG system. This page allows users to input their location and search queries, retrieves relevant points of interest using the Google Maps API, and displays the results in a user-friendly format. It also provides an audio summary of the accessibility information for nearby locations, making it easier for users with visual impairments to navigate their surroundings. The results are cached for effciency, and users can clear the cache as needed. This page serves as the core interface for users to interact with the application's features and functionalities."""
+
 import streamlit as st
-import requests
+
+import os
 import time
+import requests
 import pandas as pd
 from typing import Any, TypedDict, List, Dict
 from pydantic import ConfigDict

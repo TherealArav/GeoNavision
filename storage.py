@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from geopy.distance import great_circle
 from typing import TYPE_CHECKING, Optional, Dict, Any
+from pathlib import Path
 from datetime import datetime
 import sqlite3
 import json
@@ -17,7 +18,7 @@ class QueryStorage:
         Initializes the SQLite database.
         Row-based storage is used for optimal single-record retrieval.
         """
-        self.db_path = db_path
+        self.db_path = Path(db_path)
         self._create_table()
 
     def _get_connection(self) -> sqlite3.Connection:
