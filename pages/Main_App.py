@@ -357,9 +357,11 @@ if st.session_state.auth:
         # Cache System -- Connect to local storage and check for nearby cached results before running system.
         connection = initialize_storage()
         st.session_state.cache = connection.find_nearby_query(query_text=query, lat=st.session_state.user_lat, lon=st.session_state.user_lon)
-        if st.session_state.cache:
-            st.session_state.summary = st.session_state.cache.get("summary", "Unable to generate summary from cache.")
-            table_data: list[dict[str,Any]] = st.session_state.cache.get("table_data", [])
+        cache_result = st.session_state.cache
+
+        if cache_result:
+            st.session_state.summary = cache_result.summary or "No summary available."
+            table_data: list[dict[str,Any]] = cache_result.table_data or []
             reconstruct_docs: list[Document] = []
             for record in table_data:
                 reconstruct_docs.append(Document(
@@ -401,7 +403,12 @@ if st.session_state.auth:
 
     if c4.button("Clear Cache") and st.session_state.cache:
         connection = initialize_storage()
-        connection._delete_query_result(query_text=st.session_state.cache.get("query"), lat=st.session_state.cache.get("lat"), lon=st.session_state.cache.get("lon"))
+        connection._delete_query_result(
+            query_text=st.session_state.cache.query, 
+            lat=st.session_state.cache.lat, 
+            lon=st.session_state.cache.lon
+            )
+        
         clear_results()
         st.success("Cache cleared for this query and location.")
         

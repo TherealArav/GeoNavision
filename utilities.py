@@ -1,3 +1,4 @@
+"""Utility functions for handling various operations, including parsing document metadata, validating user queries, lat-lon validation, and creating DataFrames from document metadata. This module provides a structured way to manage and manipulate data extracted from LangChain documents, ensuring efficient processing and presentation of information."""
 
 from __future__ import annotations
 
@@ -51,7 +52,7 @@ class utilities:
         2. Ensure the query contains only alphanumeric characters and spaces to prevent SQL injection.
         3. Return True if the query is valid, False otherwise.
         """
-        if not query or len(query) > 100 or not query.strip() or query is pd.NA:
+        if not query or len(query) > 100 or not query.strip():
             return False
         if not all(c.isalnum() or c.isspace() for c in query):
             return False

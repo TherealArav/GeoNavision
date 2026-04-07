@@ -1,9 +1,11 @@
 
+"""Module for handling data storage and retrieval, including caching query results based on user location and query text. This module provides a structured way to manage cached data, ensuring efficient retrieval and storage while maintaining data integrity and security."""
+
 from __future__ import annotations
 
-
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from geopy.distance import great_circle
-from typing import TYPE_CHECKING, Optional, Dict, Any
+from typing import TYPE_CHECKING, Optional, Dict, List, Any
 from pathlib import Path
 from datetime import datetime
 import sqlite3
@@ -12,6 +14,29 @@ import json
 if TYPE_CHECKING:
     import pandas as pd
 
+
+class QueryRecord(BaseModel):
+    """Schema for a cached spatial query result."""
+    
+    # Allows Pydantic to read data directly from objects like sqlite3.Row
+    model_config = ConfigDict(from_attributes=True) 
+
+    id: Optional[int] = None
+    query: str
+    lat: float = Field(ge=-90.0, le=90.0, description="Valid latitude")
+    lon: float = Field(ge=-180.0, le=180.0, description="Valid longitude")
+    summary: Optional[str] = None
+    # We enforce that table_data is a list of records, not just a raw string
+    table_data: List[Dict[str, Any]] = Field(default_factory=list) 
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+    @field_validator('query')
+    @classmethod
+    def clean_query(cls, v: str) -> str:
+        """Automatically lowercase and strip whitespace from queries before they are used."""
+        return v.strip().lower()
+    
+    
 class QueryStorage:
     def __init__(self, db_path: str = "spatial_cache.db"):
         """
@@ -27,7 +52,7 @@ class QueryStorage:
     def _create_table(self) -> None:
         """
         Creates the cache table and indices for performance.
-        """
+        """ 
         with self._get_connection() as conn:
             # Table for storing RAG results
             conn.execute("""
@@ -46,50 +71,69 @@ class QueryStorage:
             conn.commit()
     
 
-    def find_nearby_query(self, query_text: str, lat: float, lon: float, threshold_meters: int = 100) -> Optional[Dict[str, Any]]:
+    def find_nearby_query(self, query_text: str, lat: float, lon: float, threshold_meters: int = 500) -> Optional[QueryRecord]:
         """
         Retrieves a cached result if the user is within the threshold distance.
         """
-        query_text = query_text.lower()
+
+        query_text = query_text.strip().lower()
         user_loc = (lat, lon)
         
         with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row 
-            # The index 'idx_query' makes this SELECT extremely fast
             cursor = conn.execute(
                 "SELECT * FROM cached_queries WHERE query = ?", 
                 (query_text,)
             )
-            rows = cursor.fetchall()
+            rows: List[Dict[str,Any]] = cursor.fetchall()
 
         valid_results = []
         for row in rows:
-            stored_loc = (row["lat"], row["lon"])
-            distance = great_circle(user_loc, stored_loc).meters
+            try:
+                raw_data = dict(row)
+                raw_data["table_data"] = json.loads(raw_data["table_data"])
+                record = QueryRecord.model_validate(raw_data)
+
+                stored_loc = (record.lat, record.lon)
+                distance = great_circle(user_loc, stored_loc).meters
             
-            if distance <= threshold_meters:
-                data = dict(row)
-                data["table_data"] = json.loads(data["table_data"])
-                valid_results.append(data)
+                if distance <= threshold_meters:
+                    valid_results.append(record)
+
+            except Exception as e:
+                print(f"Error processing cached record ID {row['id']}: {e}")
+                continue
 
         if not valid_results:
             return None
 
         # Return the most recent record matching the location
-        return sorted(valid_results, key=lambda x: x["timestamp"], reverse=True)[0]
+        return sorted(valid_results, key=lambda x: x.timestamp, reverse=True)[0]
 
     def save_query_result(self, query_text: str, lat: float, lon: float, df: pd.DataFrame, summary: str) -> None:
         """
         Saves result to local storage, serializing the DataFrame to JSON.
         """
-        table_json = json.dumps(df.to_dict('records'))
-        timestamp = datetime.now().isoformat()
-        
+        record = QueryRecord(
+            query=query_text,
+            lat=lat,
+            lon=lon,
+            summary=summary,
+            table_data=df.to_dict('records')
+        )
+
         with self._get_connection() as conn:
             conn.execute("""
                 INSERT INTO cached_queries (query, lat, lon, summary, table_data, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (query_text.lower(), lat, lon, summary, table_json, timestamp))
+            """, (
+                record.query,
+                record.lat,
+                record.lon,
+                record.summary,
+                json.dumps(record.table_data),
+                record.timestamp.isoformat()
+            ))
             conn.commit()
 
     def _delete_query_result(self,query_text: str, lat: float, lon: float) -> None:

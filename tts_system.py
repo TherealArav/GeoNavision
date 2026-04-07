@@ -1,4 +1,9 @@
+"""KokoroTTS: A Text-to-Speech system using the Kokoro ONNX model. his module provides a class to generate audio from text using the Kokoro TTS engine. It handles model loading, text preprocessing, and audio generation, ensuring that the system is robust and efficient for use in various applications."""
+
+from __future__ import annotations
+
 from kokoro_onnx import Kokoro
+
 import soundfile as sf
 import numpy as np
 import requests
@@ -19,7 +24,6 @@ try:
 except Exception as e:
     print(f"Warning: Could not patch NumPy: {e}")
     
-
 
 class KokoroTTS:
 
@@ -91,14 +95,9 @@ class KokoroTTS:
             if end_space > 0:
                 text = text[:end_space] + "..."
 
-        # For Debugging: Uncomment the following lines to see the cleaned text before generation
-        # print("\n --- Text Check Passed ---")
-        # print(text)
-        # print("--- End of Text Check ---\n")
+ 
         return True, text
         
-
-
     def generate_audio(self, text: str, voice: str = "af_sarah", speed: float = 1.0):
         """
         Generates audio bytes from text.
