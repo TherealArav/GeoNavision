@@ -149,6 +149,8 @@ streamlit
 streamlit-folium
 streamlit-geolocation
 sympy
+transformers==4.48.3
+sentence-transformers
 tenacity
 termcolor
 toml
@@ -171,4 +173,3 @@ websockets
 xxhash
 xyzservices
 zstandard
-sentence-transformers
