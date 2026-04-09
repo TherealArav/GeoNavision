@@ -4,10 +4,11 @@ import streamlit as st
 
 
 article_typography = """
-<style>
-    /* Import both Raleway and Vidaloka */
-    @import url('https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,100..900;1,100..900&family=Vidaloka&display=swap');
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,100..900;1,100..900&family=Vidaloka&display=swap" rel="stylesheet">
 
+<style>
     /* 2. Set Raleway as the standard text for the main page area */
     section[data-testid="stMain"] {
         font-family: 'Raleway', sans-serif !important;
@@ -23,10 +24,10 @@ article_typography = """
     section[data-testid="stMain"] span {
         font-family: 'Raleway', sans-serif !important;
 
-        font-size: 1.15rem !important;      /* Slightly larger base text for articles */
-        line-height: 1.7 !important;        /* Generous vertical breathing room */
-        letter-spacing: 0.01em !important;  /* Very subtle horizontal spacing */
-        margin-bottom: 1.5rem !important;   /* Space between paragraphs */
+        font-size: 1.15rem !important;      
+        line-height: 1.7 !important;        
+        letter-spacing: 0.01em !important;  
+        margin-bottom: 1.5rem !important;   
     }
 
     /* 3. Set Vidaloka strictly for the titles and headers */
@@ -34,13 +35,12 @@ article_typography = """
     section[data-testid="stMain"] h2, 
     section[data-testid="stMain"] h3,
     section[data-testid="stMain"] h4 {
-
         font-family: 'Vidaloka', serif !important;
     
-        line-height: 1.2 !important;        /* Tighter line height for multi-line titles */
-        letter-spacing: -0.01em !important; /* Pulls characters slightly closer for a premium feel */
-        margin-top: 2rem !important;        /* Extra space above headers to separate sections */
-        margin-bottom: 1rem !important;     /* Space below headers before text starts */
+        line-height: 1.2 !important;        
+        letter-spacing: -0.01em !important; 
+        margin-top: 2rem !important;        
+        margin-bottom: 1rem !important;     
         text-align: center;
     }
 

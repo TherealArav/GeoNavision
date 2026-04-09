@@ -171,3 +171,4 @@ websockets
 xxhash
 xyzservices
 zstandard
+sentence-transformers

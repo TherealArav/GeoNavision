@@ -18,6 +18,7 @@ try:
     def _patched_load(*args, **kwargs):
         if 'allow_pickle' not in kwargs:
             kwargs['allow_pickle'] = True
+            print("Info: np.load called without allow_pickle, defaulting to True for Kokoro compatibility.")
         return _original_load(*args, **kwargs)
     # Apply the patch
     np.load = _patched_load
