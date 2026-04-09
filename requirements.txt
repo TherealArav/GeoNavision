@@ -77,7 +77,7 @@ mpmath
 narwhals
 nest-asyncio
 networkx
-numpy
+numpy==1.26.4
 nvidia-cublas-cu12
 nvidia-cuda-cupti-cu12
 nvidia-cuda-nvrtc-cu12
