@@ -5,23 +5,25 @@ from streamlit_folium import st_folium
 
 import folium
 
+
 def get_directions_url(dest_lat: float, dest_lon: float) -> str:
     """
     Generate Google Maps directions link
     """
     return f"https://www.google.com/maps/dir/?api=1&destination={dest_lat},{dest_lon}"
 
+
 if "docs" not in st.session_state:
     st.session_state.docs = []
 
 
 def apply_page_style() -> None:
-
     """
     Apply Custom CSS to the Maps Page for better layout and map display.
     """
-    
-    st.markdown("""
+
+    st.markdown(
+        """
     <style>
         /* 1. Remove standard Streamlit padding */
         .block-container {
@@ -39,25 +41,31 @@ def apply_page_style() -> None:
         
 
     </style>
-""", unsafe_allow_html=True)
+""",
+        unsafe_allow_html=True,
+    )
 
 
 # Map Visualization
 if st.session_state.docs:
 
     apply_page_style()
-    m = folium.Map(location=[st.session_state.user_lat, st.session_state.user_lon], zoom_start=15)
+    m = folium.Map(
+        location=[st.session_state.user_lat, st.session_state.user_lon], zoom_start=15
+    )
 
     # Define user location marker
     folium.Marker(
         [st.session_state.user_lat, st.session_state.user_lon],
         popup="Current Position",
-        icon=folium.Icon(color="blue", icon="user", prefix="fa")
+        icon=folium.Icon(color="blue", icon="user", prefix="fa"),
     ).add_to(m)
 
     for d in st.session_state.docs:
 
-        maps_link: str = get_directions_url(d.metadata['latitude'], d.metadata['longitude'])
+        maps_link: str = get_directions_url(
+            d.metadata["latitude"], d.metadata["longitude"]
+        )
         popup_html = f"""
         <div style="font-family: Arial; width: 200px;">
             <b>{d.metadata['poi_name']}</b><br>
@@ -66,16 +74,18 @@ if st.session_state.docs:
             <a href='{maps_link}' target='_blank'>Get Directions</a>
         </div>
         """
-        
+
         folium.Marker(
-            [d.metadata['latitude'], d.metadata['longitude']],
+            [d.metadata["latitude"], d.metadata["longitude"]],
             popup=folium.Popup(popup_html, max_width=250),
-            icon=folium.Icon(color="orange", icon="location-dot", prefix="fa")
+            icon=folium.Icon(color="orange", icon="location-dot", prefix="fa"),
         ).add_to(m)
-    
+
     # Display the map at the center
-    st_folium(m,width= "100%",height=1000,returned_objects=[])
+    st_folium(m, width="100%", height=1000, returned_objects=[])
 
 else:
-    
-    st.info("No nearby points of interest found. Please try a different location or query.")
+
+    st.info(
+        "No nearby points of interest found. Please try a different location or query."
+    )

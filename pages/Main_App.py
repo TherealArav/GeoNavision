@@ -24,6 +24,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from sentence_transformers import SentenceTransformer
 
 import warnings
+
 warnings.filterwarnings("ignore", message="Accessing __path__")
 
 
@@ -338,7 +339,7 @@ def initialize_storage() -> QueryStorage:
 @st.cache_resource
 def initialize_embedding_model():
     """Cache the lightweight model so it only loads into memory once."""
-    return SentenceTransformer('all-MiniLM-L6-v2')
+    return SentenceTransformer("all-MiniLM-L6-v2")
 
 
 # UI IMPLEMENTATION
@@ -404,7 +405,6 @@ if st.session_state.auth:
 
         clear_results()
 
-
         embedder = initialize_embedding_model()
         query_vector: List[float] = embedder.encode(query).tolist()
 
@@ -415,7 +415,7 @@ if st.session_state.auth:
             user_embedding=query_vector,
             lat=st.session_state.user_lat,
             lon=st.session_state.user_lon,
-            similarity_threshold=0.80
+            similarity_threshold=0.80,
         )
         cache_result = st.session_state.cache
 
@@ -467,12 +467,12 @@ if st.session_state.auth:
                     lat=st.session_state.user_lat,
                     lon=st.session_state.user_lon,
                     summary=st.session_state.summary,
-                    table_data=df_to_cache.to_dict('records'),
-                    embedding=query_vector 
+                    table_data=df_to_cache.to_dict("records"),
+                    embedding=query_vector,
                 )
 
                 connection.save_query_result(new_record)
-                
+
             except Exception as e:
                 st.error(f"Error: {e}")
 

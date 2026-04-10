@@ -114,7 +114,6 @@ class QueryStorage:
         Retrieves a cached result if the user is within the threshold distance.
         """
 
-
         user_loc = (lat, lon)
 
         with self._get_connection() as conn:
@@ -132,7 +131,6 @@ class QueryStorage:
 
                 if raw_data["embedding"]:
                     raw_data["embedding"] = json.loads(raw_data["embedding"])
-                
 
                 record = QueryRecord.model_validate(raw_data)
 
@@ -158,20 +156,26 @@ class QueryStorage:
         # Return the most recent record matching the location
         return best_record
 
-    def save_query_result(self,record: Optional[QueryRecord] ) -> None:
+    def save_query_result(self, record: Optional[QueryRecord]) -> None:
         """
         Saves result to local storage, serializing the DataFrame to JSON.
         """
         with self._get_connection() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO cached_queries (query, lat, lon, summary, table_data, embedding, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                record.query, record.lat, record.lon, 
-                record.summary, json.dumps(record.table_data), 
-                json.dumps(record.embedding), # Serialize vector to JSON
-                record.timestamp.isoformat()
-            ))
+            """,
+                (
+                    record.query,
+                    record.lat,
+                    record.lon,
+                    record.summary,
+                    json.dumps(record.table_data),
+                    json.dumps(record.embedding),  # Serialize vector to JSON
+                    record.timestamp.isoformat(),
+                ),
+            )
             conn.commit()
 
     def _delete_query_result(self, query_text: str, lat: float, lon: float) -> None:
