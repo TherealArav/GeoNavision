@@ -1,35 +1,17 @@
-"""KokoroTTS: A Text-to-Speech system using the Kokoro ONNX model. his module provides a class to generate audio from text using the Kokoro TTS engine. It handles model loading, text preprocessing, and audio generation, ensuring that the system is robust and efficient for use in various applications."""
+"""KokoroTTS: A Text-to-Speech system using the Kokoro ONNX model."""
 
 from __future__ import annotations
 
 from kokoro_onnx import Kokoro
-
 import soundfile as sf
-import numpy as np
 import requests
 import os
 import io
 import re
 
-# --- Patch to allow picke loading of Kokoro instances ---
-try:
-    _original_load = np.load
-    # Define a wrapper that defaults allow_pickle to True
-    def _patched_load(*args, **kwargs):
-        if 'allow_pickle' not in kwargs:
-            kwargs['allow_pickle'] = True
-            print("Info: np.load called without allow_pickle, defaulting to True for Kokoro compatibility.")
-        return _original_load(*args, **kwargs)
-    # Apply the patch
-    np.load = _patched_load
-except Exception as e:
-    print(f"Warning: Could not patch NumPy: {e}")
-    
-
 class KokoroTTS:
 
-    CLEAN_REGEX = re.compile(r'[^\w\s.,!?;:\'\-\"()$]')
-
+    CLEAN_REGEX = re.compile(r"[^\w\s.,!?;:\'\-\"()$]")
 
     def __init__(self):
         """
@@ -37,105 +19,70 @@ class KokoroTTS:
         Ensures model weights are present before loading the ONNX session.
         """
 
-        self.model_path = "kokoro-v0_19.onnx"
-        self.voices_path = "voices.bin"
+        self.model_path = "kokoro-v1.0.onnx"
+        self.voices_path = "voices-v1.0.bin"
+        
         self._ensure_models_exist()
-
-        # Initialize the model instance
         self.kokoro = Kokoro(self.model_path, self.voices_path)
-    
+
     def _ensure_models_exist(self):
         """
-        Downloads the model weights and voice configs if they are missing.
-        Uses standard requests without UI spinners to keep this class pure.
+        Downloads the modern v1.0 model weights and binary voice configs.
         """
-
-        # URLs for the ONNX model and voices file (v0.19)
-        MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v0_19.onnx"
-        VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin"
+        # Official v1.0 URLs
+        MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+        VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
 
         if not os.path.exists(self.model_path):
-            print("Downloading Kokoro Model (this may take a moment)...")
+            print("Downloading Kokoro v1.0 Model (this may take a moment)...")
             response = requests.get(MODEL_URL, stream=True)
-
-            # Save the model file in chunks to avoid memory issues
+            response.raise_for_status()
+            
             with open(self.model_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
             print("Model Downloaded.")
 
-
         if not os.path.exists(self.voices_path):
-            print("Downloading Voices Config...")
+            print("Downloading Voices Config v1.0...")
             response = requests.get(VOICES_URL)
-
-             # Save the voices file
+            response.raise_for_status()
+            
             with open(self.voices_path, "wb") as f:
                 f.write(response.content)
             print("Voices Config Downloaded.")
 
+    def _check_text(self, text: str) -> tuple[bool, str]:
+        if text is None or not isinstance(text, str) or text.strip() == "":
+            return False, ""
 
-    def _check_text(self,text: str) -> tuple[bool,str]:
-        """
-        Docstring for _check_text
-        
-        :param text: Description
-        :type text: str
-        """
-        if text is None or not isinstance(text,str) or text.strip() == "":
-            return False, ''
-        
         # Normalize whitespace
         text = " ".join(text.split())
-        text = self.CLEAN_REGEX.sub('', text)
+        text = self.CLEAN_REGEX.sub("", text)
 
         if len(text.split()) > 250:
-            print("Warning: Text exceeds 500 characters. Truncating to fit model limits.")
+            print("Warning: Text exceeds 250 words. Truncating to fit model limits.")
             text = " ".join(text.split()[:250])
-            end_space = text.rfind(' ')
+            end_space = text.rfind(" ")
             if end_space > 0:
                 text = text[:end_space] + "..."
 
- 
         return True, text
-        
+
     def generate_audio(self, text: str, voice: str = "af_sarah", speed: float = 1.0):
-        """
-        Generates audio bytes from text.
-        Returns None if text is empty.
-        """
+        """Generates audio bytes from text."""
         check_result, text = self._check_text(text)
         if not check_result:
             print("Warning: Empty or invalid text provided. Returning empty audio.")
             return None
-        
-        # Generate audio samples using the Kekoro model
+
+        # Generate audio samples
         samples, sample_rate = self.kokoro.create(
-                text, 
-                voice=voice, 
-                speed=speed, 
-                lang="en-us"
-            )
-        
+            text, voice=voice, speed=speed, lang="en-us"
+        )
+
         # Convert the samples to WAV format in memory
         byte_io = io.BytesIO()
-        sf.write(byte_io, samples, sample_rate, format='WAV')
+        sf.write(byte_io, samples, sample_rate, format="WAV")
         byte_io.seek(0)
         return byte_io
-
-
-if __name__ == "__main__":
-    # Test the KokoroTTS class by generating audio from a sample text
-    
-    sample = KokoroTTS()
-    sample_text = """
-    Here is your accessibility guide for nearby supermarkets. I found nine locations in your vicinity.
-    For confirmed accessibility, Waitrose in Downtown Dubai, Spinneys in DIFC, and both Carrefour Markets at Marina Crown and Silverene Towers offer fully accessible entrances and restrooms. The West Zone Fresh Hypermarket near the metro station in Al Barsha also provides full accessibility.
-    Several other locations, including Aswaaq in Al Sofouh, Al Maya, and VIVA Supermarket, have confirmed accessible entrances, but their restroom accessibility is currently unknown. Please note that the 'Gate 1 to 20' location in Al Barsha has an accessible entrance but does not have an accessible restroom.
-    The closest option with full verified accessibility is Waitrose, which is 1.2 kilometers away."
-"""
-    audio = sample.generate_audio(sample_text)
-    if audio is not None:
-        with open("sample_output.wav", "wb") as f:
-            f.write(audio.read())
-
