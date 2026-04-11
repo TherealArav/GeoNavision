@@ -52,7 +52,7 @@ jsonpatch
 jsonpointer
 jsonschema
 jsonschema-specifications
-kokoro-onnx==0.5.0
+kokoro-onnx
 langchain
 langchain-core
 langchain-google-genai
