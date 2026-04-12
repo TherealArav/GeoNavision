@@ -75,7 +75,7 @@ numpy==2.4.2
 onnxruntime==1.24.1
 orjson==3.11.4
 ormsgpack==1.12.0
-packaging==26.0
+packaging
 pandas==2.3.3
 parso==0.8.5
 pathlib==1.0.1
