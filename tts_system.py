@@ -20,7 +20,7 @@ class KokoroTTS:
         """
 
         self.model_path = "kokoro-v1.0.onnx"
-        self.voices_path = "voices-v1.0.json"
+        self.voices_path = "voices-v1.0.bin"
         
         self._ensure_models_exist()
         self.kokoro = Kokoro(self.model_path, self.voices_path)
@@ -29,9 +29,9 @@ class KokoroTTS:
         """
         Downloads the modern v1.0 model weights and binary voice configs.
         """
-        # Official v1.0 URLs
-        MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v0_19.onnx"
-        VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.json"
+
+        MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+        VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
 
         if not os.path.exists(self.model_path):
             print("Downloading Kokoro v1.0 Model (this may take a moment)...")
