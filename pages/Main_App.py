@@ -23,9 +23,18 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from sentence_transformers import SentenceTransformer
 
+import logging
 import warnings
 
+
+# Suppress warnings from the sentence-transformers and related libraries
 warnings.filterwarnings("ignore", message="Accessing __path__")
+warnings.filterwarnings("ignore", category=UserWarning)
+
+# Set logging levels to ERROR to hide INFO and WARNING messages from terminal
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+
 
 
 load_dotenv()
