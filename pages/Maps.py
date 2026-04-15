@@ -47,6 +47,7 @@ def apply_page_style() -> None:
 
 
 # Map Visualization
+st.set_page_config(page_title="GeoNavision - Maps", page_icon="🗺️")
 if st.session_state.docs:
 
     apply_page_style()
