@@ -354,7 +354,7 @@ def initialize_embedding_model():
 # UI IMPLEMENTATION
 st.set_page_config(
     page_title="GeoNavision | Accessibility Explorer",
-    page_icon="🌍",
+    page_icon="favicon.svg",
     layout="wide"
 )
 apply_custom_css()
