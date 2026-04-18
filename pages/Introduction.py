@@ -57,7 +57,7 @@ article_typography = """
 """
 
 
-st.set_page_config(page_title="GeoNavision - Introduction", page_icon="📍")
+st.set_page_config(page_title="GeoNavision - Introduction", page_icon="static/location.svg")
 st.markdown(article_typography, unsafe_allow_html=True)
 
 st.header("Welcome to GeoNavision")
