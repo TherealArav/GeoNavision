@@ -2,10 +2,7 @@
 
 import streamlit as st
 
-# Memory
-from memory_profiler import profile
 
-@profile
 def mainApp():
     # Define the pages of the application
     intro_page = st.Page("pages/Introduction.py", title="Introduction")
