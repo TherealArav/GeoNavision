@@ -49,6 +49,7 @@ class GoogleMapsPOIRetriever(BaseRetriever):
     radius: int = 1500
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+
     def _get_pois_from_places_new(self, query: str) -> list[Dict[str, Any]]:
         """
         Uses searchText to find POIs.
