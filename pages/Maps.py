@@ -71,6 +71,8 @@ def add_route_to_map(m: folium.Map, start_lat: float, start_lon: float, dest_lat
             distance_km = data['routes'][0]['distance'] / 1000
             duration_min = data['routes'][0]['duration'] / 60
             tooltip_info = f"Route: {distance_km:.2f} km (~{duration_min:.0f} mins)"
+
+            st.sidebar.markdown(f"**Route Info:** {tooltip_info}")  # Display route info in the sidebar for quick reference
             
             # 4. Draw the line on the map
             folium.PolyLine(
@@ -127,7 +129,6 @@ if st.session_state.docs:
     if selected_poi_name:
         dest_lat = poi_list[selected_poi_name][0]
         dest_lon = poi_list[selected_poi_name][1]
-        st.sidebar.success(f"Navigating to: {selected_poi_name}")
         add_route_to_map(m, st.session_state.user_lat, st.session_state.user_lon, dest_lat, dest_lon)
 
 
