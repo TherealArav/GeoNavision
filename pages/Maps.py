@@ -47,60 +47,68 @@ def apply_page_style() -> None:
     )
 
 
-def add_route_to_map(m: folium.Map, start_lat: float, start_lon: float, dest_lat: float, dest_lon: float) -> None:
+def add_route_to_map(
+    m: folium.Map, start_lat: float, start_lon: float, dest_lat: float, dest_lon: float
+) -> None:
     """
     Fetches driving route from OSRM and adds a PolyLine to the provided Folium map.
     """
     # OSRM API requires coordinates in Longitude, Latitude order
     url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{dest_lon},{dest_lat}?overview=full&geometries=geojson"
-    
+
     try:
         # Add a timeout so the Streamlit app doesn't hang indefinitely if the API is down
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
-        
-        if data.get('code') == 'Ok':
+
+        if data.get("code") == "Ok":
             # 1. Extract the route geometry
-            route_coords = data['routes'][0]['geometry']['coordinates']
-            
+            route_coords = data["routes"][0]["geometry"]["coordinates"]
+
             # 2. Convert [lon, lat] from OSRM to [lat, lon] for Folium
             folium_coords = [[lat, lon] for lon, lat in route_coords]
-            
+
             # 3. Extract metadata for the tooltip
-            distance_km = data['routes'][0]['distance'] / 1000
-            duration_min = data['routes'][0]['duration'] / 60
+            distance_km = data["routes"][0]["distance"] / 1000
+            duration_min = data["routes"][0]["duration"] / 60
             tooltip_info = f"Route: {distance_km:.2f} km (~{duration_min:.0f} mins)"
 
-            st.sidebar.markdown(f"**Route Info:** {tooltip_info}")  # Display route info in the sidebar for quick reference
-            
+            st.sidebar.markdown(
+                f"**Route Info:** {tooltip_info}"
+            )  # Display route info in the sidebar for quick reference
+
             # 4. Draw the line on the map
             folium.PolyLine(
                 locations=folium_coords,
-                color='#3b82f6', # A clean, visible blue
+                color="#3b82f6",
                 weight=6,
                 opacity=0.8,
-                tooltip=tooltip_info
+                tooltip=tooltip_info,
             ).add_to(m)
-            
+
         else:
-            st.warning(f"Could not calculate route: {data.get('message', 'Unknown routing error')}")
-            
+            st.warning(
+                f"Could not calculate route: {data.get('message', 'Unknown routing error')}"
+            )
+
     except requests.exceptions.RequestException as e:
         # If the network call fails, show an error in the Streamlit UI instead of crashing
-        st.error("Failed to connect to the routing service. Showing straight-line distance instead.")
-        
+        st.error(
+            "Failed to connect to the routing service. Showing straight-line distance instead."
+        )
+
         # Fallback: Draw a simple straight line if the API fails
         folium.PolyLine(
             locations=[[start_lat, start_lon], [dest_lat, dest_lon]],
-            color='gray',
+            color="gray",
             weight=4,
-            dash_array='10',
-            tooltip="API Offline - Showing straight line"
+            dash_array="10",
+            tooltip="API Offline - Showing straight line",
         ).add_to(m)
 
 
-poi_list: dict[str,tuple[float,float]] = {}
+poi_list: dict[str, tuple[float, float]] = {}
 
 
 st.set_page_config(page_title="GeoNavision - Maps", page_icon="static/maps.svg")
@@ -117,10 +125,9 @@ if st.session_state.docs:
     selected_poi_name = st.sidebar.selectbox(
         "Select your destination:",
         options=list(poi_list.keys()),
-        index=None, 
-        placeholder="Choose a POI..."
+        index=None,
+        placeholder="Choose a POI...",
     )
-
 
     m = folium.Map(
         location=[st.session_state.user_lat, st.session_state.user_lon], zoom_start=15
@@ -129,8 +136,9 @@ if st.session_state.docs:
     if selected_poi_name:
         dest_lat = poi_list[selected_poi_name][0]
         dest_lon = poi_list[selected_poi_name][1]
-        add_route_to_map(m, st.session_state.user_lat, st.session_state.user_lon, dest_lat, dest_lon)
-
+        add_route_to_map(
+            m, st.session_state.user_lat, st.session_state.user_lon, dest_lat, dest_lon
+        )
 
     # Define user location marker
     folium.Marker(
