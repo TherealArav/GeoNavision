@@ -36,7 +36,6 @@ logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 logging.getLogger("transformers").setLevel(logging.ERROR)
 
 
-
 load_dotenv()
 
 
@@ -48,7 +47,6 @@ class GoogleMapsPOIRetriever(BaseRetriever):
     cse_id: str
     radius: int = 1500
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
 
     def _get_pois_from_places_new(self, query: str) -> list[Dict[str, Any]]:
         """
@@ -333,6 +331,7 @@ AUDIO SCRIPT:
 
     return summary, docs
 
+
 def render_accessible_summary_dark(summary_text):
     custom_css = """
     <style>
@@ -350,7 +349,7 @@ def render_accessible_summary_dark(summary_text):
     }
     </style>
     """
-    
+
     st.markdown(custom_css, unsafe_allow_html=True)
     html_content = f"""
     <div class="accessible-summary-box-dark">
@@ -359,6 +358,7 @@ def render_accessible_summary_dark(summary_text):
     </div>
     """
     st.markdown(html_content, unsafe_allow_html=True)
+
 
 @st.cache_resource
 def initialize_tts() -> KokoroTTS:
@@ -382,7 +382,7 @@ def initialize_embedding_model():
 st.set_page_config(
     page_title="GeoNavision | Accessibility Explorer",
     page_icon="static/favicon.svg",
-    layout="wide"
+    layout="wide",
 )
 apply_custom_css()
 st.title("Local Accessibility Explorer")
@@ -543,7 +543,6 @@ if st.session_state.auth:
     with st.container(border=True):
         st.subheader("AI Guide Results")
         st.dataframe(poi_df, hide_index=True)
-
 
     if st.session_state.summary:
         render_accessible_summary_dark(st.session_state.summary)
