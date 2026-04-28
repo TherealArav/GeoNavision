@@ -333,6 +333,32 @@ AUDIO SCRIPT:
 
     return summary, docs
 
+def render_accessible_summary_dark(summary_text):
+    custom_css = """
+    <style>
+    .accessible-summary-box-dark {
+        background-color: oklch(12.9% 0.042 264.695); 
+        color: #FAFAFA; 
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 6px solid #60A5FA; 
+        font-family: sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); /* Adds subtle depth */
+    }
+    </style>
+    """
+    
+    st.markdown(custom_css, unsafe_allow_html=True)
+    html_content = f"""
+    <div class="accessible-summary-box-dark">
+        <strong style="color: #60A5FA;">AI Location Summary:</strong><br><br>
+        {summary_text}
+    </div>
+    """
+    st.markdown(html_content, unsafe_allow_html=True)
 
 @st.cache_resource
 def initialize_tts() -> KokoroTTS:
@@ -517,14 +543,15 @@ if st.session_state.auth:
     with st.container(border=True):
         st.subheader("AI Guide Results")
         st.dataframe(poi_df, hide_index=True)
-        st.space("small")
-        st.subheader("AI Summary")
-        st.markdown(st.session_state.summary)
-        st.space("small")
-        if c5_button:
-            tts: KokoroTTS = initialize_tts()
-            audio_bytes = tts.generate_audio(st.session_state.summary)
-            st.audio(audio_bytes, format="audio/wav")
+
+
+    if st.session_state.summary:
+        render_accessible_summary_dark(st.session_state.summary)
+
+    if c5_button:
+        tts: KokoroTTS = initialize_tts()
+        audio_bytes = tts.generate_audio(st.session_state.summary)
+        st.audio(audio_bytes, format="audio/wav")
 
 else:
     st.info("Please enter the password in the sidebar.")
