@@ -26,7 +26,6 @@ from sentence_transformers import SentenceTransformer
 import logging
 import warnings
 
-
 # Suppress warnings from the sentence-transformers and related libraries
 warnings.filterwarnings("ignore", message="Accessing __path__")
 warnings.filterwarnings("ignore", category=UserWarning)
