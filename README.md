@@ -1,8 +1,7 @@
 # AI POI Guide   
 *A Streamlit App*
 
-## Link to streamlit community website
-https://geonavision-hc9dvzy96cb8auq9bwxzgq.streamlit.app/
+
 
 > **Your personal guide, powered by RAG, LangChain, Google APIs, and Gemini 2.5-Flash!**
 
